@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     
-    if (pcap_compile(descr, &fp, "tcp", 0, pNet) == -1) {
+    if (pcap_compile(descr, &fp, "port 5005", 0, pNet) == -1) {
         printf("pcap_compile() failed\n");
         return -1;
     }
