@@ -9,7 +9,7 @@
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
    Used so that you don't have to declare an error buffer per function. */
-static char errbuf[PCAP_ERRBUF_SIZE];
+static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
 
 extern int print_lcd(const char *file, const char *function, const char *msg);
 
@@ -20,7 +20,7 @@ void callback(u_char *user,
 int get_listening_device(char *dev, int dev_length);
 
 int main(int argc, char *argv[]) {
-    char dev[DEVICE_NAME_LENGTH];
+    char dev[DEVICE_NAME_LENGTH] = {'\0'};
     pcap_t *descr;
     
     /* If name of device is passed as command-line argument,
@@ -115,7 +115,7 @@ callback(u_char *user,
     }
     printf("\n\n");
 
-    char buffer[10];
+    char buffer[10] = {'\0'};
     snprintf(buffer, 10, "%d", count);
     print_lcd("python_print", "python_print", buffer);
 }
