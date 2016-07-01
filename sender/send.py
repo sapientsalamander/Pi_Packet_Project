@@ -10,7 +10,7 @@ select_just_pressed = False
 
 lcd.set_color(0, 0, 0)
 lcd.clear();
-lcd.message('Number of packets sent:\n' + str(number_packets_sent))
+lcd.message('# of packets:\nsent:' + str(number_packets_sent))
 
 while(True):
    if lcd.is_pressed(LCD.SELECT):
