@@ -1,32 +1,29 @@
+#include <stdlib.h>
 #include "python2.7/Python.h"
 
 int
-main(int argc, char *argv[])
+print_lcd(const char *file, const char *function, const char *msg)
 {
+    setenv("PYTHONPATH", ".", 1);
     PyObject *pName, *pModule, *pDict, *pFunc;
     PyObject *pArgs, *pValue;
     int i;
 
-    if (argc < 3) {
-        fprintf(stderr,"Usage: call pythonfile funcname [args]\n");
-        return 1;
-    }
-
     Py_Initialize();
-    pName = PyString_FromString(argv[1]);
+    pName = PyString_FromString(file);
     /* Error checking of pName left out */
 
     pModule = PyImport_Import(pName);
     Py_DECREF(pName);
 
     if (pModule != NULL) {
-        pFunc = PyObject_GetAttrString(pModule, argv[2]);
+        pFunc = PyObject_GetAttrString(pModule, function);
         /* pFunc is a new reference */
 
         if (pFunc && PyCallable_Check(pFunc)) {
-            pArgs = PyTuple_New(argc - 3);
-            for (i = 0; i < argc - 3; ++i) {
-                pValue = PyInt_FromLong(atoi(argv[i + 3]));
+            pArgs = PyTuple_New(1);
+            for (i = 0; i < 1; ++i) {
+                pValue = PyString_FromString(msg);
                 if (!pValue) {
                     Py_DECREF(pArgs);
                     Py_DECREF(pModule);
@@ -38,8 +35,8 @@ main(int argc, char *argv[])
             }
             pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
-            if (pValue != NULL) {
-                printf("Result of call: %ld\n", PyInt_AsLong(pValue));
+            /*if (pValue != NULL) {
+                printf("Result of call: %ld\n", PyString_FromString(pValue));
                 Py_DECREF(pValue);
             } else {
                 Py_DECREF(pFunc);
@@ -47,17 +44,17 @@ main(int argc, char *argv[])
                 PyErr_Print();
                 fprintf(stderr,"Call failed\n");
                 return 1;
-            }
+            }*/
         } else {
             if (PyErr_Occurred())
                 PyErr_Print();
-            fprintf(stderr, "Cannot find function \"%s\"\n", argv[2]);
+            fprintf(stderr, "Cannot find function \"%s\"\n", function);
         }
         Py_XDECREF(pFunc);
         Py_DECREF(pModule);
     } else {
         PyErr_Print();
-        fprintf(stderr, "Failed to load \"%s\"\n", argv[1]);
+        fprintf(stderr, "Failed to load \"%s\"\n", file);
         return 1;
     }
     Py_Finalize();

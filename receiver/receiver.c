@@ -1,6 +1,7 @@
 #include <pcap.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* Name of the device that we will be listening to (ex. eth0, wla0...). 
    Includes the null terminator. */
@@ -9,6 +10,8 @@
 /* Static error buffer that holds any errors that pcap returns back to us. 
    Used so that you don't have to declare an error buffer per function. */
 static char errbuf[PCAP_ERRBUF_SIZE];
+
+extern int print_lcd(const char *file, const char *function, const char *msg);
 
 void callback(u_char *user,
               const struct pcap_pkthdr *pkthdr,
@@ -44,7 +47,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     
-    if (pcap_compile(descr, &fp, "port 5005", 0, pNet) == -1) {
+    if (pcap_compile(descr, &fp, "port 7777", 0, pNet) == -1) {
         printf("pcap_compile() failed\n");
         return -1;
     }
@@ -111,4 +114,8 @@ callback(u_char *user,
         printf("%u ", (unsigned)*packet);
     }
     printf("\n\n");
+
+    char buffer[10];
+    snprintf(buffer, 10, "%d", count);
+    print_lcd("python_print", "python_print", buffer);
 }
