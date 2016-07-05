@@ -17,5 +17,6 @@ def print_lcd():
 if __name__ == '__main__':
    while True:
       print_lcd()
-      print listener.recvfrom(7777), '\n', type(listener)
+      packet = sniff(filter='port 7777', count = 5)
+      print packet 
       number_packets_received += 1
