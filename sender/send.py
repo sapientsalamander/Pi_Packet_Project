@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import time
 
 from scapy.all import *
@@ -12,8 +13,7 @@ select_just_pressed = False
 def print_lcd():
    lcd.set_cursor(0,0)
    lcd.clear()
-   #lcd.message('# of packets\nsent: ' + str(number_packets_sent))
-   lcd.message('Hello World')
+   lcd.message('# of packets\nsent: ' + str(number_packets_sent))
 
 if __name__ == '__main__':
    print_lcd()
