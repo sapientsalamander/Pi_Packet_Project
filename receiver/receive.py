@@ -1,6 +1,15 @@
 #!/usr/bin/env/python
 
-import socket
+import socket, fcntl, sys
+
+#Lock to only allow one instance of this program to run
+pid_file = '/tmp/send.pid'
+fp = open(pid_file, 'w')
+try:
+   fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except IOError:
+   print 'An instance of this program is already running'
+   sys.exit(0)
 
 import Adafruit_CharLCD as LCD
 
