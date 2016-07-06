@@ -10,7 +10,9 @@ try:
 except IOError:
    print 'An instance of this program is already running'
    sys.exit(0)
+#End of lock code
 
+from scapy.all import *
 import Adafruit_CharLCD as LCD
 
 lcd = LCD.Adafruit_CharLCDPlate()
@@ -20,12 +22,16 @@ listener = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
 
 number_packets_received = 0
 
-def print_lcd():
+def print_lcd(packet):
    lcd.clear()
-   lcd.message('# of packets\nreceived: ' + str(number_packets_received))
+   lcd.message('# received: ' + str(number_packets_received) + '\n')
+   if packet:
+      lcd.message(packet.getlayer(Raw).load)
 
 if __name__ == '__main__':
+   packet = None
    while True:
-      print_lcd()
-      print listener.recvfrom(7777)
+      print_lcd(packet)
+      #packet = listener.recvfrom(7777)
+      packet = sniff(filter = 'port 7777', count = 1)[0]
       number_packets_received += 1
