@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import socket, fcntl, sys
+import fcntl, sys
 
 #Lock to only allow one instance of this program to run
 pid_file = '/tmp/send.pid'
@@ -12,25 +12,62 @@ except IOError:
    sys.exit(0)
 #End of lock code
 
+import socket, time
+
 from scapy.all import *
 import Adafruit_CharLCD as LCD
 
-lcd = LCD.Adafruit_CharLCDPlate()
-lcd.set_color(0,0,0)
+def get_rx_bytes():
+   with open('/sys/class/net/eth0/statistics/rx_bytes', 'r') as file:
+      data = file.read()
+   return int(data)
 
-listener = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+abbrs = ('bps', 'Kbps', 'Mbps')
 
-number_packets_received = 0
-
-def print_lcd(packet):
+def print_lcd(packet, number_packets_received, bandwidth):
    lcd.clear()
-   lcd.message('# received: ' + str(number_packets_received) + '\n')
+   lcd.message('Rx: ' + str(number_packets_received) + ' ')
    if packet:
-      lcd.message(packet.getlayer(Raw).load)
+      try:
+         lcd.message(packet.getlayer(Raw).load)
+      except AttributeError:
+         lcd.message('No payload')
 
-packet = None
-while True:
-   print_lcd(packet)
-   #packet = listener.recvfrom(7777)
-   packet = sniff(filter = 'port 7777', count = 1)[0]
-   number_packets_received += 1
+   lcd.set_cursor(0,1)
+
+   i = 0
+   while bandwidth > 1024:
+      bandwidth /= 1024
+      i += 1
+   lcd.message('Bw: ' + str(round(bandwidth, 1)) + ' ' + abbrs[i])
+
+if __name__ == '__main__':
+   #Initializing LCD
+   lcd = LCD.Adafruit_CharLCDPlate()
+   lcd.set_color(0,0,0)
+
+   #Opening a raw socket to receive data from
+   listener = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+
+   number_packets_received = 0
+
+   #How many bytes received, for bandwidth measuring
+   rx_prev = get_rx_bytes()
+   time_prev = time.time()
+
+   packet = None
+   lcd.message('Waiting for\npackets...')
+
+   while True:
+      #packet = listener.recvfrom(7777)
+      packet = sniff(filter = 'port 7777', count = 1)[0]
+
+      number_packets_received += 1
+
+      rx_cur = get_rx_bytes()
+      time_cur = time.time()
+
+      print_lcd(packet, number_packets_received, (rx_cur - rx_prev)/(time_cur - time_prev) * 8)
+
+      rx_prev = rx_cur
+      time_prev = time_cur
