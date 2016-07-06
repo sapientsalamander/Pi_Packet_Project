@@ -28,10 +28,9 @@ def print_lcd(packet):
    if packet:
       lcd.message(packet.getlayer(Raw).load)
 
-if __name__ == '__main__':
-   packet = None
-   while True:
-      print_lcd(packet)
-      #packet = listener.recvfrom(7777)
-      packet = sniff(filter = 'port 7777', count = 1)[0]
-      number_packets_received += 1
+packet = None
+while True:
+   print_lcd(packet)
+   #packet = listener.recvfrom(7777)
+   packet = sniff(filter = 'port 7777', count = 1)[0]
+   number_packets_received += 1
