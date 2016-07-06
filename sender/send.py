@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import time, fcntl, sys
+import time, fcntl, sys, socket
 
 #Lock to only allow one instance of this program to run
 pid_file = '/tmp/send.pid'
@@ -10,6 +10,7 @@ try:
 except IOError:
    print 'An instance of this program is already running'
    sys.exit(0)
+#End of lock code
 
 from scapy.all import *
 import Adafruit_CharLCD as LCD
@@ -17,7 +18,12 @@ import Adafruit_CharLCD as LCD
 lcd = LCD.Adafruit_CharLCDPlate()
 lcd.set_color(0,0,0)
 
+#s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+#s.bind(('eth0', 0))
 pkt = IP(dst='10.0.24.243')/UDP(sport=7777,dport=7777)/("Hello World!")
+#pkt = Ether()/IP(dst='10.0.24.243')/UDP()
+#data = pkt.build()
+
 number_packets_sent = 0
 select_just_pressed = False
 
