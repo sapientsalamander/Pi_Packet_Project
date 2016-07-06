@@ -1,4 +1,4 @@
-#!/usr/bin/env/python
+#!/usr/bin/env python
 
 import socket, fcntl, sys
 
@@ -27,5 +27,5 @@ def print_lcd():
 if __name__ == '__main__':
    while True:
       print_lcd()
-      print listener.recvfrom(7777), '\n', type(listener)
+      print listener.recvfrom(7777)
       number_packets_received += 1
