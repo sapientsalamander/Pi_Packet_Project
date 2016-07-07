@@ -24,22 +24,57 @@ def get_rx_bytes():
 
 abbrs = ('bps', 'Kbps', 'Mbps')
 
-def print_lcd(packet, number_packets_received, bandwidth):
-   lcd.clear()
-   lcd.message('Rx:%3d ' % number_packets_received)
+lcd_lock = thread.allocate_lock()
+
+def print_packet_info(packet, number_packets_received):
+   message = ('Rx:%3d ' % number_packets_received)
+
    if packet:
       try:
-         lcd.message(packet.getlayer(Raw).load)
+         message += packet.getlayer(Raw).load
       except AttributeError:
-         lcd.message('No payload')
+         message += 'No payload'
 
-   lcd.set_cursor(0,1)
+   message.ljust(20)
 
-   i = 0
-   while bandwidth >= 1000:
-      bandwidth /= 1000.0
-      i += 1
-   lcd.message('Bw:%3.0f %s' % (bandwidth, abbrs[i]))
+   lcd_lock.acquire()
+
+   lcd.set_cursor(0,0)
+   lcd.message(message)
+
+   lcd_lock.release()
+
+#How many bytes received at a given time, for bandwidth measuring
+rx_prev = get_rx_bytes()
+time_prev = time.time()
+
+def update_statistics():
+   rx_prev = get_rx_bytes()
+   time_prev = time.time()
+   while True:
+      rx_cur = get_rx_bytes()
+      time_cur = time.time()
+
+      bandwidth = (rx_cur - rx_prev)/(time_cur - time_prev) * 8
+
+      i = 0
+      while bandwidth >= 1000:
+         bandwidth /= 1000.0
+         i += 1
+
+      message = ('Bw:%3.1f %s' % (bandwidth, abbrs[i])).ljust(20)
+
+      lcd_lock.acquire()
+
+      lcd.set_cursor(0,1)
+      lcd.message(message)
+
+      lcd_lock.release()
+
+      rx_prev = rx_cur
+      time_prev = time_cur
+
+      time.sleep(1)
 
 if __name__ == '__main__':
    #Initializing LCD
@@ -51,12 +86,13 @@ if __name__ == '__main__':
 
    number_packets_received = 0
 
-   #How many bytes received, for bandwidth measuring
-   rx_prev = get_rx_bytes()
-   time_prev = time.time()
-
    packet = None
-   lcd.message('Waiting for\npackets...')
+   lcd.message('Awaiting packets')
+
+   try:
+      thread.start_new_thread(update_statistics, ())
+   except:
+      print 'Error: ', sys.exc_info()[0]
 
    while True:
       packet = listener.recvfrom(7777)
@@ -64,10 +100,4 @@ if __name__ == '__main__':
 
       number_packets_received += 1
 
-      rx_cur = get_rx_bytes()
-      time_cur = time.time()
-
-      print_lcd(packet, number_packets_received, (rx_cur - rx_prev)/(time_cur - time_prev) * 8)
-
-      rx_prev = rx_cur
-      time_prev = time_cur
+      print_packet_info(packet, number_packets_received)
