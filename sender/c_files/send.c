@@ -35,6 +35,7 @@ int main(void) {
          return 1;
       }
       ++i;
+      printf("%c", '.');
    }
    close(s);
    return 0;
