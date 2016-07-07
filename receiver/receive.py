@@ -12,7 +12,7 @@ except IOError:
    sys.exit(0)
 #End of lock code
 
-import socket, time
+import socket, time, thread
 
 from scapy.all import *
 import Adafruit_CharLCD as LCD
@@ -26,7 +26,7 @@ abbrs = ('bps', 'Kbps', 'Mbps')
 
 def print_lcd(packet, number_packets_received, bandwidth):
    lcd.clear()
-   lcd.message('Rx: ' + str(number_packets_received) + ' ')
+   lcd.message('Rx:%3d ' % number_packets_received)
    if packet:
       try:
          lcd.message(packet.getlayer(Raw).load)
@@ -36,10 +36,10 @@ def print_lcd(packet, number_packets_received, bandwidth):
    lcd.set_cursor(0,1)
 
    i = 0
-   while bandwidth > 1024:
-      bandwidth /= 1024
+   while bandwidth >= 1000:
+      bandwidth /= 1000.0
       i += 1
-   lcd.message('Bw: ' + str(round(bandwidth, 1)) + ' ' + abbrs[i])
+   lcd.message('Bw:%3.0f %s' % (bandwidth, abbrs[i]))
 
 if __name__ == '__main__':
    #Initializing LCD
@@ -59,8 +59,8 @@ if __name__ == '__main__':
    lcd.message('Waiting for\npackets...')
 
    while True:
-      #packet = listener.recvfrom(7777)
-      packet = sniff(filter = 'port 7777', count = 1)[0]
+      packet = listener.recvfrom(7777)
+      #packet = sniff(filter = 'port 7777', count = 1)[0]
 
       number_packets_received += 1
 
