@@ -22,14 +22,14 @@ from scapy.all import *
 import Adafruit_CharLCD as LCD
 
 # Abbreviations for bandwidth measuring.
-UNIT_ABBRS = ('bps', 'Kbps', 'Mbps')
+BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps')
 
 # An LCD lock, to ensure that the two threads, one for port listening and
 # one for bandwidth measuring, do not interfere when updating the LCD.
 lcd_lock = thread.allocate_lock()
 
 def print_line(message, line):
-   """Print message to screen on line, multithreading safe
+   """Print message to screen on line, multithreading safe.
 
    Locks the LCD so that only one thread can write to it at a time.
    Also ensures that writing to a line won't clear the entire screen.
@@ -49,7 +49,10 @@ def get_rx_bytes():
 
    On Linux machines, there is a directory (/sys/class/net/...) that
    contains networking information about different interfaces, and we just
-   pull the number of bytes received over eth0 since startup
+   pull the number of bytes received over eth0 since startup.
+
+   Returns:
+      The number of bytes received over eth0 since startup.
    """
    with open('/sys/class/net/eth0/statistics/rx_bytes', 'r') as file:
       data = file.read()
@@ -60,8 +63,8 @@ def update_packet_info(packet, number_packets_received):
    and total number of packets received.
 
    Args:
-      packet: a capture scapy packet
-      number_packets_received: packets received since program started.
+      packet: A capture scapy packet.
+      number_packets_received: Packets received since program started.
    """
    message = ('Rx:%3d ' % number_packets_received)
 
@@ -86,14 +89,14 @@ def update_statistics():
       # Bandwidth (bits/s) = (delta bytes / delta time) * 8 bits / byte.
       bandwidth = (rx_cur - rx_prev)/(time_cur - time_prev) * 8
 
-      # If > 1000, increases size of units (b -> Kb -> Mb).
+      # If bandwidth > 1000, increases size of units (b -> Kb -> Mb).
       i = 0
       while bandwidth >= 1000:
          bandwidth /= 1000.0
          i += 1
 
       # Ex. Bw: 30.5 Kbps.
-      message = 'Bw:%5.1f %s' % (bandwidth, UNIT_ABBRS[i])
+      message = 'Bw:%5.1f %s' % (bandwidth, BDWTH_ABBRS[i])
 
       print_line(message, 1)
 
@@ -108,7 +111,7 @@ def listen_packets():
    number_packets_received = 0
    while True:
       # Listen for one packet, and since sniff returns a list, take
-      # the first element
+      # the first element.
       packet = sniff(filter = 'port 7777', count = 1)[0]
 
       number_packets_received += 1
@@ -116,7 +119,7 @@ def listen_packets():
       update_packet_info(packet, number_packets_received) 
 
 if __name__ == '__main__':
-   # Initializing LCD and turn off LED.
+   # Initializes LCD and turn off LED.
    lcd = LCD.Adafruit_CharLCDPlate()
    lcd.set_color(0,0,0)
 
