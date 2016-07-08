@@ -3,97 +3,14 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* Name of the device that we will be listening to (ex. eth0, wla0...). 
-   Includes the null terminator. */
-#define DEVICE_NAME_LENGTH 64
+/* The device that we will be listening to. */
+#define DEVICE "eth0"
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
    Used so that you don't have to declare an error buffer per function. */
 static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
 
 extern int print_lcd(const char *file, const char *function, const char *msg);
-
-void callback(u_char *user,
-              const struct pcap_pkthdr *pkthdr,
-              const u_char *packet);
-
-int get_listening_device(char *dev, int dev_length);
-
-int main(int argc, char *argv[]) {
-    char dev[DEVICE_NAME_LENGTH] = {'\0'};
-    pcap_t *descr;
-    
-    /* If name of device is passed as command-line argument,
-       use that as the device name. If not, get it from stdin. */
-    if (argc == 2) {
-        dev[0] = '\0';
-        strncat(dev, argv[1], DEVICE_NAME_LENGTH-1);
-    } else {
-        if (get_listening_device(dev, DEVICE_NAME_LENGTH)) {
-            printf("get_listening_device() failed\n");
-            return -1;
-        }
-    }
-    
-    struct bpf_program fp;
-    bpf_u_int32 pMask;
-    bpf_u_int32 pNet;
-    
-    pcap_lookupnet(dev, &pNet, &pMask, errbuf);
-    descr = pcap_open_live(dev, BUFSIZ, 0, -1, errbuf);
-    
-    if (descr == NULL) {
-        printf("pcap_open_live() failed to open: %s\n", errbuf);
-        return -1;
-    }
-    
-    if (pcap_compile(descr, &fp, "port 7777", 0, pNet) == -1) {
-        printf("pcap_compile() failed\n");
-        return -1;
-    }
-    
-    if (pcap_setfilter(descr, &fp) == -1) {
-        printf("pcap_setfilter() failed\n");
-        return -1;
-    }
-    
-    pcap_loop(descr, -1, callback, NULL);
-    
-    return 0;
-}
-
-/* Displays a list of available device and prompts the user to select
-   a device to listen to. */
-int
-get_listening_device(char *dev, int dev_length)
-{
-    /* Pointer to device, held in a linked list structure. */
-    pcap_if_t *alldevs;
-        
-    /* Find all devices that we can listen from. */
-    if (pcap_findalldevs(&alldevs, errbuf) == -1) {
-        printf("Error in pcap_findalldevs: %s\n", errbuf);
-        return -1;
-    }
-        
-    /* Display the name of each device, with a description (if available). */
-    for (pcap_if_t *d = alldevs; d; d = d->next) {
-        printf("%s", d->name);
-        if(d->description) {
-            printf(": %s", d->description);
-        }
-        printf("\n");
-    }
-    
-    printf("Enter the name of a device: ");
-    
-    fgets(dev, dev_length-1, stdin);
-        
-    /* Get rid of the newline character. */
-    dev[strlen(dev)-1] = '\0';
-    
-    return 0;
-}
 
 /* Function that is invoked whenever a packet is received. Takes in a 
    struct pcap_pkthdr, which contains information about the length of
@@ -118,4 +35,34 @@ callback(u_char *user,
     char buffer[10] = {'\0'};
     snprintf(buffer, 10, "%d", count);
     print_lcd("python_print", "python_print", buffer);
+}
+
+int main(int argc, char *argv[]) {
+    pcap_t *descr;
+    
+    struct bpf_program fp;
+    bpf_u_int32 pMask;
+    bpf_u_int32 pNet;
+    
+    pcap_lookupnet(DEVICE, &pNet, &pMask, errbuf);
+    descr = pcap_open_live(DEVICE, BUFSIZ, 0, -1, errbuf);
+    
+    if (descr == NULL) {
+        printf("pcap_open_live() failed to open: %s\n", errbuf);
+        return -1;
+    }
+    
+    if (pcap_compile(descr, &fp, "port 7777", 0, pNet) == -1) {
+        printf("pcap_compile() failed\n");
+        return -1;
+    }
+    
+    if (pcap_setfilter(descr, &fp) == -1) {
+        printf("pcap_setfilter() failed\n");
+        return -1;
+    }
+    
+    pcap_loop(descr, -1, callback, NULL);
+    
+    return 0;
 }
