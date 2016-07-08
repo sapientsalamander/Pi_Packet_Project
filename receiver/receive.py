@@ -24,19 +24,26 @@ import thread
 from scapy.all import *
 import Adafruit_CharLCD as LCD
 
-class Screens:
-   """An enum class for the different screens.
+# Before enums were introduced in Python, this was one such method of 'faking'
+# an enum. It takes a list of identifiers, zips it from 0..n-1, where n is the
+# number of identifiers passed in, and uses the type function to generate a new
+# class with the aforementioned identifiers as class variables.
+def enums(*sequential):
+   enums = dict(zip(sequential, range(len(sequential))))
+   return type('Enum', (), enums)
 
-   Screens:
-      Summary: Number of total packets received and current bandwidth.
-      Payload: The payload of the previous packet that came in.
-   """
-   Summary, Payload = range(2)
+# Creating the class, called Screens, with variables listed below, each holding a
+# value, starting from 0 to n-1.
+Screens = enums('Summary', 'Payload', 'Source', 'Num')
 
-
+# Used to determine which screen should currently be shown.
 cur_screen = Screens.Summary
 
-screen_output = [['',''], ['','']]
+# Hold information for all screens, so screens in the background can
+# still be updating and storing new information. Contains a list of tuples,
+# each having two strings, representing line 0 and line 1 of the LCD for each
+# type of screen there is.
+screen_output = [['',''] for x in xrange(Screens.Num)]
 
 # Abbreviations for bandwidth measuring.
 BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps')
@@ -46,10 +53,13 @@ BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps')
 lcd_lock = thread.allocate_lock()
 
 def display_loop():
+   """Pull in screen_output and update screen based on which one should
+   be currently up.
+   """
    while True:
-      print_line(screen_output[cur_screen][0], 0)
-      print_line(screen_output[cur_screen][1], 1)
-      time.sleep(1)
+      for i in xrange(2):
+         print_line(screen_output[cur_screen][i], i)
+      time.sleep(0.7)
 
 def print_line(message, line):
    """Print message to screen on line, multithreading safe.
@@ -98,8 +108,15 @@ def update_packet_info(packet, number_packets_received):
    except AttributeError:
       screen_output[Screens.Payload][0] = 'No payload'
 
+   # IP address
+   screen_output[Screens.Source][0] = packet.getlayer(IP).src
+   # MAC address
+   screen_output[Screens.Source][1] = packet.getlayer(Ether).src.replace(':', '')
+
 def update_statistics():
-   """Calculate the bandwidth and displays it on the LCD."""
+   """Calculate the bandwidth (can be expanded to include more info) and displays 
+   it on the LCD.
+   """
    rx_prev = get_rx_bytes()
    time_prev = time.time()
    while True:
@@ -119,6 +136,7 @@ def update_statistics():
       message = 'Bw:%5.1f %s' % (bandwidth, BDWTH_ABBRS[i])
 
       screen_output[Screens.Summary][1] = message
+
       rx_prev = rx_cur
       time_prev = time_cur
 
@@ -137,12 +155,19 @@ def listen_packets():
       update_packet_info(packet, number_packets_received) 
 
 def input_loop():
+   """Listens for button presses and updates the current screen
+
+   Each button is associated with a different screen, and so when you
+   push a button, the screen that should be currently shown is changed.
+   """
    global cur_screen
    while True:
       if lcd.is_pressed(LCD.UP):
          cur_screen = Screens.Summary
       elif lcd.is_pressed(LCD.DOWN):
          cur_screen = Screens.Payload
+      elif lcd.is_pressed(LCD.LEFT):
+         cur_screen = Screens.Source
 
 if __name__ == '__main__':
    # Initializes LCD and turn off LED.
@@ -157,4 +182,8 @@ if __name__ == '__main__':
       thread.start_new_thread(input_loop, ())
    except:
       print 'Error: ', sys.exc_info()[0]
+
+   # Run one of the functions on the main thread, just to avoid having to create
+   # another thread, and because the main thread would need to wait for the other
+   # threads or the program would stop running as soon as it reaches the end.
    listen_packets()
