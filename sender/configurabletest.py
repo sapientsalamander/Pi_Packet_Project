@@ -18,27 +18,6 @@ except IOError:
 # End of lock code
 
 
-lcd = LCD.Adafruit_CharLCDPlate()
-lcd.set_color(0,0,0)
-lcd.blink(True)
-
-
-def print_payload(payloads, select):
-   """Print the selected payload to the LCD."""
-
-   lcd.clear()
-   lcd.message('Payload:\n' + payloads[select])
-
-def print_IP(ip, cursor): 
-   """Print the IP address to the LCD screen.
-
-   ip -- list containing an IP address
-   """   
-   
-   lcd.clear()
-   lcd.message('IP:\n' + "".join(ip))
-   lcd.set_cursor(cursor, 1)
-
 def print_port(line, srcpt, dstpt, cursor):
    """Prints source and destination ports to the LCD screen.
    
@@ -48,6 +27,55 @@ def print_port(line, srcpt, dstpt, cursor):
    lcd.clear()
    lcd.message('Src Port: ' + "".join(srcpt) + '\nDst Port: ' + "".join(dstpt))
    lcd.set_cursor(cursor + 10, line) #+10 to skip over text 
+
+def update_display(disp, lst, cursor):
+   """Prints either IP address or Payload to LCD screen during selection.
+
+   disp -- 0 for payload, 1 for IP
+   lst -- a list containing the information to be printed
+   cursor -- the location of the cursor on the screen
+   """
+   screens = ['Payload: \n', 'IP: \n']
+   lcd.clear()
+   lcd.message(screens[disp] + "".join(lst))
+   lcd.set_cursor(cursor, 1)
+
+def input_port(srcpt, dstpt, port):
+   """Changes a port value to user input.
+
+   srcpt -- the starting value of the source port
+   dstpt -- the starting value of the destination port
+   port -- the port to be modified (0 for source, 1 for destination)
+
+   returns the modified port as a list of digits
+   """
+   cursor = 0
+   ports = [srcpt, dstpt]
+   print_port(port, ports[0], ports[1], cursor)
+   while True:
+      if lcd.is_pressed(LCD.UP):
+         inc_digit(ports[port], cursor)
+         print_port(port, ports[0], ports[1], cursor) 
+         time.sleep(0.1)
+      if lcd.is_pressed(LCD.DOWN):
+         dec_digit(ports[port], cursor)
+         print_port(port, ports[0], ports[1], cursor)
+         time.sleep(0.1)
+      if lcd.is_pressed(LCD.LEFT):
+         cursor -= 1
+         if cursor < 0:
+            cursor = 0
+         print_port(port, ports[0], ports[1], cursor)
+         time.sleep(0.1)
+      if lcd.is_pressed(LCD.RIGHT):
+         cursor += 1
+         if cursor > 3:
+            cursor = 3
+         print_port(port, ports[0], ports[1], cursor)
+         time.sleep(0.1)
+      if lcd.is_pressed(LCD.SELECT):
+         time.sleep(0.1)
+         return ports[port]
 
 def inc_digit(lst, cursor):
    """Increase the digit under the cursor by 1, looping through 0-9. 
@@ -108,23 +136,26 @@ def rmv_leading_zerosPORT(port):
    return numPort
 
 
+lcd = LCD.Adafruit_CharLCDPlate()
+lcd.set_color(0,0,0)
+lcd.blink(True)
+
 ip = list('000.000.000.000')
-payloads = ['Hello World!', 'foo', 'bar', '']
+payloads = [list('Hello World!'), list('foo'), list('bar'), list('')]
 srcpt = list('0000') 
 dstpt = list('0000') 
 cursor = 0
 
-
 # Inputting IP address
-print_IP(ip, cursor)
+update_display(1, ip, cursor)
 while True: 
    if lcd.is_pressed(LCD.UP):
       inc_digit(ip, cursor)
-      print_IP(ip, cursor)
+      update_display(1, ip, cursor)
       time.sleep(0.1) # To prevent duplicate presses
    if lcd.is_pressed(LCD.DOWN):
       dec_digit(ip, cursor)
-      print_IP(ip, cursor)
+      update_display(1, ip, cursor)
       time.sleep(0.1)
    if lcd.is_pressed(LCD.LEFT):
       cursor -= 1
@@ -132,7 +163,7 @@ while True:
          cursor = 0
       if ip[cursor] == ".": # Skip over periods
          cursor -= 1
-      print_IP(ip, cursor)
+      update_display(1, ip, cursor)
       time.sleep(0.1)
    if lcd.is_pressed(LCD.RIGHT):
       cursor += 1
@@ -140,7 +171,7 @@ while True:
          cursor = 14
       if ip[cursor] == ".":
          cursor += 1
-      print_IP(ip, cursor)
+      update_display(1, ip, cursor)
       time.sleep(0.1)
    if lcd.is_pressed(LCD.SELECT):
       time.sleep(0.1)
@@ -148,89 +179,36 @@ while True:
 ip = rmv_leading_zerosIP(ip)
 # End IP input
 
+# Port input
+srcpt = input_port(srcpt, dstpt, 0)
+dstpt = input_port(srcpt, dstpt, 1)
 
-# Inputting source port
-cursor = 0
-print_port(0, srcpt, dstpt, cursor)
-while True:
-   if lcd.is_pressed(LCD.UP):
-      inc_digit(srcpt, cursor)
-      print_port(0, srcpt, dstpt, cursor) 
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.DOWN):
-      dec_digit(srcpt, cursor)
-      print_port(0, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.LEFT):
-      cursor -= 1
-      if cursor < 0:
-         cursor = 0
-      print_port(0, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.RIGHT):
-      cursor += 1
-      if cursor > 3:
-         cursor = 3
-      print_port(0, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.SELECT):
-      time.sleep(0.1)
-      break
-# Do not remove leading zeros until both ports are entered
-# print_port() requires both be lists
-
-# Inputting destination port
-cursor = 0
-print_port(1, srcpt, dstpt, cursor)
-while True:
-   if lcd.is_pressed(LCD.UP):
-      inc_digit(dstpt, cursor)
-      print_port(1, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.DOWN):
-      dec_digit(dstpt, cursor)
-      print_port(1, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.LEFT):
-      cursor -= 1
-      if cursor < 0:
-         cursor = 0
-      print_port(1, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.RIGHT):
-      cursor += 1
-      if cursor > 3:
-         cursor = 3
-      print_port(1, srcpt, dstpt, cursor)
-      time.sleep(0.1)
-   if lcd.is_pressed(LCD.SELECT):
-      time.sleep(0.1)
-      break
 dstpt = rmv_leading_zerosPORT(dstpt)
 srcpt = rmv_leading_zerosPORT(srcpt)
 # End port input
 
 # Choose payload
-select = 0
-print_payload(payloads, select)
+select = 1
+update_display(0, payloads[select], 0)
 while True:
    if lcd.is_pressed(LCD.UP):
       select += 1
       if select > 3:
          select = 0
-      print_payload(payloads, select)
+      update_display(0, payloads[select], 0)
       time.sleep(0.1)
    if lcd.is_pressed(LCD.DOWN):
       select -= 1
       if select < 0:
          select = 3
-      print_payload(payloads, select)
+      update_display(0, payloads[select], 0)
       time.sleep(0.1)
    if lcd.is_pressed(LCD.SELECT):
       time.sleep(0.1)
       break
+payloads[select] = "".join(payloads[select])
 
- # Construct packet
+# Construct packet
 if payloads[select] is '':
    pkt = IP(dst = ip) / UDP(sport = srcpt, dport = dstpt)
 else:
@@ -238,37 +216,55 @@ else:
 
 pktct = 0
 lcd.clear()
-lcd.message(str(ip) + '\nS:' + str(srcpt) + 'D:' + str(dstpt))
+lcd.message(str(ip) + '\nS:' + str(srcpt) + 'D:' + str(dstpt) + 'Tx%2d' % (pktct))
 
 # Sending packets 
 while True:
    if lcd.is_pressed(LCD.UP): # Toggle continuous send
       lcd.set_color(1,1,1)
+      lcd.clear()
       while True:
          send(pkt)
+         lcd.set_color(1,0,0) # Flash red when packet is sent
          pktct += 1
-         time.sleep(0.1)
+         lcd.clear()
+         lcd.message(str(ip) + '\nS:' + str(srcpt) 
+                        + 'D:' + str(dstpt) + 'Tx%2d' % (pktct)) 
+         time.sleep(0.05)
+         lcd.set_color(1,1,1)
+         time.sleep(0.5)
          if lcd.is_pressed(LCD.UP):
             lcd.set_color(0,0,0)
             lcd.clear()
-            lcd.message(str(ip) + '\nS:' + str(srcpt) + 'D:' + str(dstpt) + 'Tx' + str(pktct)) 
+            lcd.message(str(ip) + '\nS:' + str(srcpt) 
+                        + 'D:' + str(dstpt) + 'Tx%2d' % (pktct)) 
+            time.sleep(0.5)
             break
    if lcd.is_pressed(LCD.DOWN):
       lcd.clear()
       if len(payloads[select]) < 16:
          lcd.message(payloads[select])
       else:
-         whole  = payloads[select]
+         whole = "".join(payloads[select])
          first = whole[:15]
          second = whole[15:]
          lcd.message(first + '\n' + second)
          
    if lcd.is_pressed(LCD.LEFT):
       lcd.clear()
-      lcd.message(str(ip) + '\nS: ' + str(srcpt) + ' D: ' + str(dstpt))
- 
+      lcd.message(str(ip) + '\nS:' + str(srcpt) + 'D:' + str(dstpt) + 'Tx%2d' % (pktct))
+
+   if lcd.is_pressed(LCD.RIGHT):
+      lcd.set_color(1,0,0)
+      send(pkt)
+      pktct += 1
+      lcd.clear()
+      lcd.message(str(ip) + '\nS:' + str(srcpt) 
+                  + 'D:' + str(dstpt) + 'Tx%2d' % (pktct)) 
+      time.sleep(0.1)
+      lcd.set_color(0,0,0)
+      
    if lcd.is_pressed(LCD.SELECT): # Exit program
       lcd.clear()
       lcd.message(str(pktct) + " packets sent.")
       break
-   
