@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-import time, fcntl, sys, socket
+import time
+import fcntl
+import sys
+import socket
 
 #Lock to only allow one instance of this program to run
 pid_file = '/tmp/send.pid'
