@@ -1,4 +1,5 @@
 #include <pcap.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
 
 extern int print_lcd(const char *file, const char *function, const char *msg);
+extern void *initialize(void *unused);
 
 /* Function that is invoked whenever a packet is received. Takes in a 
    struct pcap_pkthdr, which contains information about the length of
@@ -37,7 +39,12 @@ callback(u_char *user,
     print_lcd("python_print", "python_print", buffer);
 }
 
-int main(int argc, char *argv[]) {
+#include <unistd.h>
+
+int
+main(int argc, char *argv[])
+{
+   /*
     pcap_t *descr;
     
     struct bpf_program fp;
@@ -63,6 +70,15 @@ int main(int argc, char *argv[]) {
     }
     
     pcap_loop(descr, -1, callback, NULL);
-    
+    */
+
+    /*pthread_t python_threads, python_update;
+    int rc = pthread_create(&python_threads, NULL, initialize, NULL);
+    if(rc) {
+        printf("Error %d\n", rc);
+        exit(-1);
+    }
+    sleep(1000);*/
+    initialize(NULL);
     return 0;
 }
