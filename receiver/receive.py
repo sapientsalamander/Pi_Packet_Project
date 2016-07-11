@@ -33,8 +33,8 @@ def enums(*sequential):
    enums = dict(zip(sequential, range(len(sequential))))
    return type('Enum', (), enums)
 
-# Creating the class, called Screens, with variables listed below, each holding a
-# value, starting from 0 to n-1.
+# Creating the class, called Screens, with variables listed below, each
+# holding a value, starting from 0 to n-1.
 Screens = enums('Summary', 'Payload', 'Source', 'Num')
 
 # Used to determine which screen should currently be shown.
@@ -48,6 +48,9 @@ screen_output = [['',''] for x in xrange(Screens.Num)]
 
 # Abbreviations for bandwidth measuring.
 BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps')
+
+# The file used to initialize the socket to communicate with C program.
+SOCKET_ADDR = '/tmp/receive_socket'
 
 # An LCD lock, to ensure that the two threads, one for port listening and
 # one for bandwidth measuring, do not interfere when updating the LCD.
@@ -112,11 +115,12 @@ def update_packet_info(packet, number_packets_received):
    # IP address
    screen_output[Screens.Source][0] = packet.getlayer(IP).src
    # MAC address
-   screen_output[Screens.Source][1] = packet.getlayer(Ether).src.replace(':', '')
+   screen_output[Screens.Source][1] = 
+      packet.getlayer(Ether).src.replace(':', '')
 
 def update_statistics_loop():
-   """Calculate the bandwidth (can be expanded to include more info) and displays 
-   it on the LCD.
+   """Calculate the bandwidth (can be expanded to include more info) and
+   displays it on the LCD.
    """
    rx_prev = get_rx_bytes()
    time_prev = time.time()
@@ -145,17 +149,22 @@ def update_statistics_loop():
       time.sleep(1)
 
 def listen_packets_loop():
-   """Listen for packets according to filter and update display."""
-   socket_addr = '/tmp/receive_socket'
-
+   """Initializes the socket used to interface with the C program, and listen
+   for any incoming packets. When we hear one, parse it with scapy and update
+   the display to show information about packet.
+   """
+   # If file descriptor already exists from previous session, we delete it.
    try:
-      os.unlink(socket_addr)
+      os.unlink(SOCKET_ADDR)
    except OSError:
-      if os.path.exists(socket_addr):
+      if os.path.exists(SOCKET_ADDR):
          raise
 
+   # Create the actual socket at the defined address.
    c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-   c_socket.bind(socket_addr)
+   c_socket.bind(SOCKET_ADDR)
+
+   # Listen for the C program to connect
    c_socket.listen(1)
    connection, client_address = c_socket.accept()
 
@@ -165,12 +174,9 @@ def listen_packets_loop():
       print 'Listening for packet'
 
       c_input = connection.recv(2048)
-      print 'Len %d' % (len(c_input))
-      print repr(c_input)
 
-      packet = Ether(c_input) #sniff(filter = 'port 7777', count = 1)[0]
-      print 'Packet:'
-      print packet
+      # Parse packet with scapy so we can pull it apart easier.
+      packet = Ether(c_input)
 
       number_packets_received += 1
       update_packet_info(packet, number_packets_received)
@@ -204,7 +210,8 @@ if __name__ == '__main__':
    except:
       print 'Error: ', sys.exc_info()[0]
 
-   # Run one of the functions on the main thread, just to avoid having to create
-   # another thread, and because the main thread would need to wait for the other
-   # threads or the program would stop running as soon as it reaches the end.
+   # Run one of the functions on the main thread, just to avoid having to
+   # create another thread, and because the main thread would need to wait
+   # for the other threads or the program would stop running as soon as it 
+   # reaches the end.
    listen_packets_loop()
