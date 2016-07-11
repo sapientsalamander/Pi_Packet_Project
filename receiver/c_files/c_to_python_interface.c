@@ -3,22 +3,6 @@
 
 #define PYTHON_FILE_NAME "receive.py"
 
-void *
-initialize(void *unused)
-{
-    Py_SetProgramName(PYTHON_FILE_NAME);
-    Py_Initialize();
-    FILE *file;
-    file = fopen(PYTHON_FILE_NAME, "r");
-    PyRun_SimpleFile(file, PYTHON_FILE_NAME);
-}
-
-void *
-finalize(void *unused)
-{
-    Py_Finalize();
-}
-
 int
 print_lcd(const char *file, const char *function, const char *msg)
 {

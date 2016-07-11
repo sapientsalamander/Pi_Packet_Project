@@ -3,16 +3,23 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 /* The device that we will be listening to. */
 #define DEVICE "eth0"
+#define PYTHON_SOCKET "/tmp/receive_socket"
+
+
+static struct sockaddr_un address;
+static int socket_fd;
+static socklen_t address_length;
+
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
    Used so that you don't have to declare an error buffer per function. */
 static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
-
-extern int print_lcd(const char *file, const char *function, const char *msg);
-extern void *initialize(void *unused);
 
 /* Function that is invoked whenever a packet is received. Takes in a 
    struct pcap_pkthdr, which contains information about the length of
@@ -34,17 +41,39 @@ callback(u_char *user,
     }
     printf("\n\n");
 
-    char buffer[10] = {'\0'};
-    snprintf(buffer, 10, "%d", count);
-    print_lcd("python_print", "python_print", buffer);
+    strncpy(msg, packet, pkthdr->len);
+
+    int n = send(socket_fd, msg, pkthdr->caplen, 0);
+    if(n < 0) {
+        printf("Error writing to socket\n");
+    } else {
+        printf("Successfully wrote %d bytes to socket\n", n);
+    }
 }
 
-#include <unistd.h>
+void
+initialize_socket()
+{
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(socket_fd < 0) {
+        printf("socket() failed\n");
+    }
+
+    memset(&address, 0, sizeof(struct sockaddr_un));
+
+    address.sun_family = AF_UNIX;
+    strcpy(address.sun_path, PYTHON_SOCKET);
+
+    if(connect(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) < 0) {
+        printf("connect() failed\n");
+    }
+}
 
 int
 main(int argc, char *argv[])
 {
-   /*
+    initialize_socket();
+
     pcap_t *descr;
     
     struct bpf_program fp;
@@ -70,7 +99,6 @@ main(int argc, char *argv[])
     }
     
     pcap_loop(descr, -1, callback, NULL);
-    */
 
     /*pthread_t python_threads, python_update;
     int rc = pthread_create(&python_threads, NULL, initialize, NULL);
@@ -78,7 +106,7 @@ main(int argc, char *argv[])
         printf("Error %d\n", rc);
         exit(-1);
     }
-    sleep(1000);*/
-    initialize(NULL);
+    sleep(1000);
+    initialize(NULL);*/
     return 0;
 }

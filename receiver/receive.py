@@ -20,6 +20,7 @@ except IOError:
 import socket
 import time
 import thread
+import os
 
 from scapy.all import *
 import Adafruit_CharLCD as LCD
@@ -113,7 +114,7 @@ def update_packet_info(packet, number_packets_received):
    # MAC address
    screen_output[Screens.Source][1] = packet.getlayer(Ether).src.replace(':', '')
 
-def update_statistics():
+def update_statistics_loop():
    """Calculate the bandwidth (can be expanded to include more info) and displays 
    it on the LCD.
    """
@@ -143,16 +144,31 @@ def update_statistics():
       # Only update statistics once a second.
       time.sleep(1)
 
-def listen_packets():
+def listen_packets_loop():
    """Listen for packets according to filter and update display."""
+   socket_addr = '/tmp/receive_socket'
+   try:
+      os.unlink(socket_addr)
+   except OSError:
+      if os.path.exists(socket_addr):
+         raise
+   c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+   c_socket.bind(socket_addr)
+   c_socket.listen(1)
+   connection, client_address = c_socket.accept()
    number_packets_received = 0
    while True:
+      print 'Listening for packet'
+      c_input = connection.recv(2048)
+      print 'Len [%d], %s' % (len(c_input), c_input)
       # Listen for one packet, and since sniff returns a list, take
       # the first element.
-      packet = sniff(filter = 'port 7777', count = 1)[0]
+      packet = Ether(c_input)#sniff(filter = 'port 7777', count = 1)[0]
+      print 'Packet:'
+      print packet
 
       number_packets_received += 1
-      update_packet_info(packet, number_packets_received) 
+      update_packet_info(packet, number_packets_received)
 
 def input_loop():
    """Listens for button presses and updates the current screen
@@ -178,7 +194,7 @@ if __name__ == '__main__':
 
    try:
       thread.start_new_thread(display_loop, ())
-      thread.start_new_thread(update_statistics, ())
+      thread.start_new_thread(update_statistics_loop, ())
       thread.start_new_thread(input_loop, ())
    except:
       print 'Error: ', sys.exc_info()[0]
@@ -186,4 +202,4 @@ if __name__ == '__main__':
    # Run one of the functions on the main thread, just to avoid having to create
    # another thread, and because the main thread would need to wait for the other
    # threads or the program would stop running as soon as it reaches the end.
-   listen_packets()
+   listen_packets_loop()
