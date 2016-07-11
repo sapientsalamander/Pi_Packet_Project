@@ -115,8 +115,8 @@ def update_packet_info(packet, number_packets_received):
    # IP address
    screen_output[Screens.Source][0] = packet.getlayer(IP).src
    # MAC address
-   screen_output[Screens.Source][1] = 
-      packet.getlayer(Ether).src.replace(':', '')
+   eth_out = packet.getlayer(Ether).src
+   screen_output[Screens.Source][1] = eth_out.replace(':', '')
 
 def update_statistics_loop():
    """Calculate the bandwidth (can be expanded to include more info) and
