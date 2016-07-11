@@ -147,23 +147,28 @@ def update_statistics_loop():
 def listen_packets_loop():
    """Listen for packets according to filter and update display."""
    socket_addr = '/tmp/receive_socket'
+
    try:
       os.unlink(socket_addr)
    except OSError:
       if os.path.exists(socket_addr):
          raise
+
    c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
    c_socket.bind(socket_addr)
    c_socket.listen(1)
    connection, client_address = c_socket.accept()
+
    number_packets_received = 0
+
    while True:
       print 'Listening for packet'
+
       c_input = connection.recv(2048)
-      print 'Len [%d], %s' % (len(c_input), c_input)
-      # Listen for one packet, and since sniff returns a list, take
-      # the first element.
-      packet = Ether(c_input)#sniff(filter = 'port 7777', count = 1)[0]
+      print 'Len %d' % (len(c_input))
+      print repr(c_input)
+
+      packet = Ether(c_input) #sniff(filter = 'port 7777', count = 1)[0]
       print 'Packet:'
       print packet
 
