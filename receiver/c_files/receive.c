@@ -14,6 +14,10 @@
  * to initialize the socket. */
 #define PYTHON_SOCKET "/tmp/receive_socket"
 
+/* Filter for any incoming packets, callback is only called on packets
+ * that pass it. */
+#define PCAP_FILTER "port 7777"
+
 /* These next few declarations are for the Python socket that we will be
  * opening, so we can redirect any incoming packets to the Python UI. */
 static struct sockaddr_un address;
@@ -64,13 +68,13 @@ initialize_socket()
     address.sun_family = AF_UNIX;
     strcpy(address.sun_path, PYTHON_SOCKET);
 
-    /* Attempt to connect to the file, and check to see if successful. */
-    int connect_return = connect(socket_fd, (struct sockaddr *)&address,
-                                 sizeof(struct sockaddr_un));
-
-    if(connect_return < 0) {
-        printf("connect() failed\n");
-        return -1;
+    /* Attempt to connect to the file, and if it failed, keep attempting to
+     * connect (in the case that the Python program has not yet started). */
+    const int size_sock = sizeof(struct sockaddr_un);
+    const struct sockaddr *pointer_sock = (struct sockaddr *) &address;
+    while(connect(socket_fd, pointer_sock, size_sock) < 0) {
+        printf("connect() failed\n. Check that the Python program is up.");
+        sleep(1);
     }
 
     return 0;
@@ -105,8 +109,14 @@ run_pcap()
         printf("pcap_setfilter() failed\n");
         return -1;
     }
-    
+
+    /* pcap function, where we give it a function to call whenever it receives
+     * a packet, and then it starts to listen for packets, which is blocking,
+     * i.e. takes over this thread, so in theory should never reach end of
+     * the function. */
     pcap_loop(descr, -1, callback, NULL);
+
+    return 0; /* Should never reach here. */
 }
 
 /* Initialize the Python socket, and runs pcap. Since pcap takes over this
