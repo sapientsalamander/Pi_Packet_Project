@@ -16,13 +16,12 @@
 
 /* Filter for any incoming packets, callback is only called on packets
  * that pass it. */
-#define PCAP_FILTER "port 7777"
+#define PCAP_FILTER "port 666"
 
 /* These next few declarations are for the Python socket that we will be
  * opening, so we can redirect any incoming packets to the Python UI. */
 static struct sockaddr_un address;
 static int socket_fd;
-static socklen_t address_length;
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
  * Used so that you don't have to declare an error buffer per function. */
@@ -38,7 +37,6 @@ callback(u_char *user,
          const u_char *packet)
 {
     static int count = 0; /* Total number of packets received. */
-
     /* Print general information about this packet. */
     printf("User [%s], packet number [%d], length of portion [%d], "
            "length of packet [%d]\n", 
@@ -47,7 +45,7 @@ callback(u_char *user,
     /* Redirect the packet to the Python socket. */
     int n = send(socket_fd, packet, pkthdr->caplen, 0);
     if (n < 0) {
-        printf("Error writing to socket\n");
+        fprintf(stderr, "Error writing to socket\n");
     }
 }
 
@@ -59,7 +57,7 @@ initialize_socket()
     /*Initialize the type of socket. */
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd < 0) {
-        printf("socket() failed\n");
+        fprintf(stderr, "Error opening socket()\n");
         return -1;
     }
 
@@ -73,9 +71,10 @@ initialize_socket()
     const int size_sock = sizeof(struct sockaddr_un);
     const struct sockaddr *pointer_sock = (struct sockaddr *) &address;
     while(connect(socket_fd, pointer_sock, size_sock) < 0) {
-        printf("connect() failed\n. Check that the Python program is up.");
+        printf("connect() failed. Check that the Python program is up.\n");
         sleep(1);
     }
+    printf("Successfully connected to Python socket\n");
 
     return 0;
 }
@@ -96,19 +95,22 @@ run_pcap()
     descr = pcap_open_live(DEVICE, BUFSIZ, 0, -1, errbuf);
     
     if (descr == NULL) {
-        printf("pcap_open_live() failed to open: %s\n", errbuf);
+        fprintf(stderr, "pcap_open_live() failed to open: %s\n", errbuf);
         return -1;
     }
     
-    if (pcap_compile(descr, &fp, "port 7777", 0, pNet) == -1) {
-        printf("pcap_compile() failed\n");
+    if (pcap_compile(descr, &fp, PCAP_FILTER, 0, pNet) == -1) {
+        fprintf(stderr, "pcap_compile() failed\n");
         return -1;
     }
     
     if (pcap_setfilter(descr, &fp) == -1) {
-        printf("pcap_setfilter() failed\n");
+        fprintf(stderr, "pcap_setfilter() failed\n");
         return -1;
     }
+
+    printf("Successfully initialized pcap\n");
+    printf("Waiting for packets...\n");
 
     /* pcap function, where we give it a function to call whenever it receives
      * a packet, and then it starts to listen for packets, which is blocking,
@@ -122,16 +124,16 @@ run_pcap()
 /* Initialize the Python socket, and runs pcap. Since pcap takes over this
  * thread, it will never reach the end (barring any errors). */
 int
-main(int argc, char *argv[])
+main(void)
 {
-    int err;
-
-    if (err = initialize_socket()) {
-        return err;
+    if (initialize_socket()) {
+        fprintf(stderr, "Error in initialize_socket()\n");
+        return -1;
     }
 
-    if (err = run_pcap()) {
-        return err;
+    if (run_pcap()) {
+        fprintf(stderr, "Error in run_pcap()\n");
+        return -1;
     }
 
     /* Old stuff, was playing around with threads. Will leave here for now

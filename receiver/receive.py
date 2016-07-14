@@ -163,22 +163,29 @@ def listen_packets_loop():
    # Create the actual socket at the defined address.
    c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
    c_socket.bind(SOCKET_ADDR)
+   print 'Successfully created socket'
 
+   print 'Waiting for C program to connect'
    # Listen for the C program to connect
    c_socket.listen(1)
    connection, client_address = c_socket.accept()
+   print 'C program connected'
 
    number_packets_received = 0
 
+   print 'Listening for packets...'
+
    while True:
-      print 'Listening for packet'
 
       c_input = connection.recv(2048)
+
+      number_packets_received += 1
+
+      print 'Received packet [%d]' % (number_packets_received)
 
       # Parse packet with scapy so we can pull it apart easier.
       packet = Ether(c_input)
 
-      number_packets_received += 1
       update_packet_info(packet, number_packets_received)
 
 def input_loop():
