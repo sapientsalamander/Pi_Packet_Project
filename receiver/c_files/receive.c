@@ -39,13 +39,13 @@ callback(u_char *user,
     static int count = 0; /* Total number of packets received. */
     /* Print general information about this packet. */
     printf("User [%s], packet number [%d], length of portion [%d], "
-           "length of packet [%d]\n", 
+           "length of packet [%d].\n", 
            user, ++count, pkthdr->caplen, pkthdr->len);
 
     /* Redirect the packet to the Python socket. */
     int n = send(socket_fd, packet, pkthdr->caplen, 0);
     if (n < 0) {
-        fprintf(stderr, "Error writing to socket\n");
+        fprintf(stderr, "Error writing to socket.\n");
     }
 }
 
@@ -57,7 +57,7 @@ initialize_socket()
     /*Initialize the type of socket. */
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd < 0) {
-        fprintf(stderr, "Error opening socket()\n");
+        fprintf(stderr, "Error opening socket().\n");
         return -1;
     }
 
@@ -74,7 +74,7 @@ initialize_socket()
         printf("connect() failed. Check that the Python program is up.\n");
         sleep(1);
     }
-    printf("Successfully connected to Python socket\n");
+    printf("Successfully connected to Python socket.\n");
 
     return 0;
 }
@@ -95,21 +95,21 @@ run_pcap()
     descr = pcap_open_live(DEVICE, BUFSIZ, 0, -1, errbuf);
     
     if (descr == NULL) {
-        fprintf(stderr, "pcap_open_live() failed to open: %s\n", errbuf);
+        fprintf(stderr, "pcap_open_live() failed to open: %s.\n", errbuf);
         return -1;
     }
     
     if (pcap_compile(descr, &fp, PCAP_FILTER, 0, pNet) == -1) {
-        fprintf(stderr, "pcap_compile() failed\n");
+        fprintf(stderr, "pcap_compile() failed.\n");
         return -1;
     }
     
     if (pcap_setfilter(descr, &fp) == -1) {
-        fprintf(stderr, "pcap_setfilter() failed\n");
+        fprintf(stderr, "pcap_setfilter() failed.\n");
         return -1;
     }
 
-    printf("Successfully initialized pcap\n");
+    printf("Successfully initialized pcap.\n");
     printf("Waiting for packets...\n");
 
     /* pcap function, where we give it a function to call whenever it receives
@@ -127,12 +127,12 @@ int
 main(void)
 {
     if (initialize_socket()) {
-        fprintf(stderr, "Error in initialize_socket()\n");
+        fprintf(stderr, "Error in initialize_socket().\n");
         return -1;
     }
 
     if (run_pcap()) {
-        fprintf(stderr, "Error in run_pcap()\n");
+        fprintf(stderr, "Error in run_pcap().\n");
         return -1;
     }
 
