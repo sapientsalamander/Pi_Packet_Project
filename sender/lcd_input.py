@@ -4,10 +4,11 @@ import time
 from Adafruit_CharLCD import *
 
 class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
-   # Before enums were introduced in Python, this was one such method of 'faking'
-   # an enum. It takes a list of identifiers, zips it from 0..n-1, where n is the
-   # number of identifiers passed in, and uses the type function to generate a new
-   # class with the aforementioned identifiers as class variables.
+   # Before enums were introduced in Python, this was one such method of 
+   # 'faking' an enum. It takes a list of identifiers, zips it from 0..n-1,
+   # where n is the number of identifiers passed in, and uses the type 
+   # function to generate a new class with the aforementioned identifiers as
+   # class variables.
    def enums(*sequential):
       enums = dict(zip(sequential, range(len(sequential))))
       return type('Enum', (), enums)
@@ -71,8 +72,28 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
    
    def find_next_input(self, list_chars, index):
       return self._find_input(list_chars, index, 1)
-   
-   def get_input(self, lcd_format):
+  
+   def get_input_list(self, list_vals):
+      index = 0;
+      self.blink(False)
+      self.clear()
+      self.message(list_vals[index])
+      while True:
+         time.sleep(0.15)
+         if self.is_pressed(UP):
+            index = ((index + 1) % len(list_vals))
+         elif self.is_pressed(DOWN):
+            index = ((index - 1) % len(list_vals))
+         elif self.is_pressed(SELECT):
+            break
+         else:
+            continue
+         self.clear()
+         self.message(list_vals[index])
+      return list_vals[index] 
+            
+
+   def get_input_format(self, lcd_format):
       list_chars = []
       i = 0
       while i < len(lcd_format):

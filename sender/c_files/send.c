@@ -1,19 +1,28 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <string.h>
 
-#define BUFLEN 512
+#define BUFLEN 64
 #define SERVER_IP "10.0.24.243"
 #define PORT 7777
 
+struct sockaddr_in si_other;
+int s, slen;
+char buf[BUFLEN];
+
+void * send_packets(void * something) {
+   while(1) {
+      sendto(s, buf, BUFLEN, 0, (struct sockaddr *)&si_other, slen);
+   }
+}
+
 int main(void) {
-   struct sockaddr_in si_other;
-   int s, slen = sizeof(si_other);
-   char buf[BUFLEN];
+   slen = sizeof(si_other);
 
    if((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
       printf("Cannot construct socket\n");
@@ -28,15 +37,24 @@ int main(void) {
       return 1;
    }
 
-   int i = 0;
+   /*int i = 0;
    while(1) {
-      if(sendto(s, buf, BUFLEN, 0, (struct sockaddr *)&si_other, slen) == -1) {
+      /*if(sendto(s, buf, BUFLEN, 0, (struct sockaddr *)&si_other, slen) == -1) {
          printf("Cannot send packet\n");
          return 1;
       }
-      ++i;
-      printf("%c", '.');
+      //printf("%d\n", i);
+      sendto(s, buf, BUFLEN, 0, (struct sockaddr *)&si_other, slen);
+   }*/
+   //close(s);
+
+   pthread_t one, two;
+   if(pthread_create(&one, NULL, send_packets, NULL)) {
+      printf("Thread error\n");
    }
-   close(s);
+   pthread_create(&two, NULL, send_packets, NULL);
+   //send_packets(NULL);
+   while(1);
+   
    return 0;
 }

@@ -140,10 +140,10 @@ lcd = LCD.Adafruit_CharLCDPlate()
 lcd.set_color(0,0,0)
 lcd.blink(True)
 
-ip = list('000.000.000.000')
-payloads = [list('Hello World!'), list('foo'), list('bar'), list('')]
-srcpt = list('0000') 
-dstpt = list('0000') 
+ip = list('010.000.024.243')
+payloads = [list('Hello World!'), list('foo'), list('bar'), list("This is a message. End"), list('')]
+srcpt = list('0080') 
+dstpt = list('0080') 
 cursor = 0
 
 # Inputting IP address
@@ -206,13 +206,14 @@ while True:
    if lcd.is_pressed(LCD.SELECT):
       time.sleep(0.1)
       break
-payloads[select] = "".join(payloads[select])
+
+while (len(payloads[select]) < 22): # Pad packet to ensure minimum 64 bytes
+   payloads[select].append(" ")
+
+pyld = "".join(payloads[select])
 
 # Construct packet
-if payloads[select] is '':
-   pkt = IP(dst = ip) / UDP(sport = srcpt, dport = dstpt)
-else:
-   pkt = IP(dst = ip) / UDP(sport = srcpt, dport = dstpt) / Raw(payloads[select])
+pkt = IP(dst = ip) / UDP(sport = srcpt, dport = dstpt) / Raw(pyld)
 
 pktct = 0
 lcd.clear()
