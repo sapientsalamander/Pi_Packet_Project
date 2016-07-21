@@ -23,6 +23,7 @@ import thread
 import os
 
 from scapy.all import *
+import psutil
 import Adafruit_CharLCD as LCD
 
 # Before enums were introduced in Python, this was one such method of 'faking'
@@ -35,7 +36,7 @@ def enums(*sequential):
 
 # Creating the class, called Screens, with variables listed below, each
 # holding a value, starting from 0 to n-1.
-Screens = enums('Summary', 'Payload', 'Source', 'Num')
+Screens = enums('Summary', 'Payload', 'Source', 'CPU', 'Num')
 
 # Used to determine which screen should currently be shown.
 cur_screen = Screens.Summary
@@ -108,7 +109,13 @@ def update_packet_info(packet, number_packets_received):
    # Grabs the payload from the scapy packet. If none is available,
    # or if packet is not a scapy packet, then it cannot parse the payload.
    try:
-      screen_output[Screens.Payload][0] = packet.getlayer(Raw).load
+      string_payload = packet.getlayer(Raw).load
+      index = string_payload.find('\n')
+      if index == -1:
+         screen_output[Screens.Payload][0] = string_payload
+      else:
+         screen_output[Screens.Payload][0] = string_payload[:index]
+         screen_output[Screens.Payload][1] = string_payload[index+1:]
    except AttributeError:
       screen_output[Screens.Payload][0] = 'No payload'
 
@@ -119,12 +126,18 @@ def update_packet_info(packet, number_packets_received):
    screen_output[Screens.Source][1] = eth_out.replace(':', '')
 
 def update_statistics_loop():
-   """Calculate the bandwidth (can be expanded to include more info) and
-   displays it on the LCD.
+   """Calculate the bandwidth and cpu usage (can be expanded to include
+   more info) and displays it on the LCD.
    """
    rx_prev = get_rx_bytes()
    time_prev = time.time()
    while True:
+      screen_output[Screens.CPU][0] = 'CPU Usage: %4.1f%%' % \
+                                      (psutil.cpu_percent())
+      cores = psutil.cpu_percent(percpu=True)
+      screen_output[Screens.CPU][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
+                                      tuple(cores)
+
       rx_cur = get_rx_bytes()
       time_cur = time.time()
 
@@ -202,6 +215,8 @@ def input_loop():
          cur_screen = Screens.Payload
       elif lcd.is_pressed(LCD.LEFT):
          cur_screen = Screens.Source
+      elif lcd.is_pressed(LCD.RIGHT):
+         cur_screen = Screens.CPU
 
 if __name__ == '__main__':
    # Initializes LCD and turn off LED.
