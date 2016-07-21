@@ -26,17 +26,28 @@
 static struct sockaddr_un address;
 static int socket_fd, python_fd;
 
+/* A thread dedicated solely to sending packets onto the wire. */
+static pthread_t send_thread;
+
 /* Static error buffer that holds any errors that pcap returns back to us.
  * Used so that you don't have to declare an error buffer per function. */
 static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
 static pcap_t *pcap;
 
+/* packet and packet length, to send to the receiving Pi. Both need _temp
+ * variables because while we are sending, we are also listening in for new
+ * packets to send, and we need to store these new packets without corrupting
+ * a send, so we store them in temporary variables while the sending function
+ * finishes up, and then we sync them. */
 static u_char packet[PACKET_BUFF_LEN];
+static u_char packet_temp[PACKET_BUFF_LEN];
+intptr_t packet_len;
+intptr_t packet_len_temp;
 
 /* Boolean to share between threads. As long as send is true, the sending
  * thread will spam the receiving Pi with as many packets as it can send.
  * If it turns false, it will stop sending packets. */
-static volatile bool spam_packets = false;
+static volatile unsigned int spam_packets = 0;
 
 /* Initializes the socket that will be used to receive packet info from
  * the Python program. It binds to the file specified as PYTHON_SOCKET,
@@ -86,7 +97,7 @@ initialize_socket(void)
 int
 initialize_pcap(void)
 {
-    pcap = pcap_open_live("eth0", 2048, 0, 0, errbuf);
+    pcap = pcap_open_live(DEVICE, 2048, 0, 0, errbuf);
     if (*errbuf) {
         fprintf(stderr, "%s", errbuf);
     }
@@ -96,20 +107,57 @@ initialize_pcap(void)
     return 0;
 }
 
-/* Sends the packet stored in packet using the pcap library to the socket
- * specified in initialize_pcap, and displays logging information. */
-void
-send_packets(void)
+/* Sends the packet stored in packet to the socket specified in
+ * initialize_pcap, and displays logging information. */
+void *
+send_packets(void * unused)
 {
-    const int MSG_LEN = recv(python_fd, packet, PACKET_BUFF_LEN, 0);
-    printf("Received packet, size[%d].\n", MSG_LEN);
-    for (int i = 0; i < MSG_LEN; ++i) {
-        printf("%i ", packet[i]);
-    }
-    int n;
-    while (spam_packets && (n = pcap_inject(pcap, packet, MSG_LEN)) > 0) {
-        printf("pcap_inject successfully injected %d bytes.\n", n);
+    int ret;
+
+    while (spam_packets && (ret = pcap_inject(pcap, packet, packet_len) > 0)) {
+        printf("Sent a packet\n");
         sleep(1);
+    }
+    if (ret <= 0) {
+        fprintf(stderr, "Error in pcap_inject(), returned %d\n", ret);
+    }
+    return unused;
+}
+
+/* Listens to the Unix socket for the packet that we should be sending to the
+ * receiving Pi. When it gathers all the information for it, such as
+ * destination, data, speed, etc. it starts sending the packet. */
+void
+listen_packets(void)
+{
+    while(1) {
+        initialize_socket();
+        while((packet_len_temp = 
+               recv(python_fd, packet_temp, PACKET_BUFF_LEN, 0)) == 0);
+
+        if (spam_packets > 0) {
+            (void) __sync_fetch_and_sub(&spam_packets, 1);
+        }
+
+        printf("Received packet, size[%d].\n", packet_len_temp);
+        for (int i = 0; i < packet_len_temp; ++i) {
+            printf("%i ", packet_temp[i]);
+        }
+
+        printf("Spam packet equals %u\n", spam_packets);
+
+        memcpy(packet, packet_temp, packet_len_temp);
+        packet_len = packet_len_temp;
+        for (int i = 0; i < packet_len; ++i) {
+            printf("%i ", packet[i]);
+        }
+
+        (void) pthread_join(send_thread, NULL);
+        if (spam_packets < 1) {
+            (void) __sync_fetch_and_add(&spam_packets, 1);
+        }
+        pthread_create(&send_thread, NULL, send_packets, NULL);
+        close(python_fd);
     }
 }
 
@@ -122,16 +170,12 @@ main(void)
         printf("Error in initialize_pcap().\n");
         return -1;
     }
-    if (initialize_socket()) {
+    /*if (initialize_socket()) {
         printf("Error in initialize_socket().\n");
         return -1;
-    }
-    //pthread_t one, two;
-    //pthread_create(&one, NULL, send_packets, NULL);
-    //pthread_create(&two, NULL, send_packets, NULL);
+    }*/
     printf("Successfully initialized everything.\n");
-    spam_packets = true;
-    send_packets();
+    listen_packets();
     close(python_fd);
     pcap_close(pcap);
 }
