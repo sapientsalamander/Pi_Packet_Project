@@ -69,7 +69,7 @@ int main(void) {
 
     int ret = -1;
     printf("NUM = %d\n", NUM_PACKS_PER_CALL);
-    while (ret < 0) ret = sendmmsg(sockfd, msg, NUM_PACKS_PER_CALL, 0);
+    while(1) sendmmsg(sockfd, msg, NUM_PACKS_PER_CALL, 0);
     //while(ret > 0) ret = sendto(sockfd, packet + 14, sizeof(packet) - 14, 0, (struct sockaddr *) &socket_address, sizeof(socket_address));
     printf("error: %d.\n", errno);
 

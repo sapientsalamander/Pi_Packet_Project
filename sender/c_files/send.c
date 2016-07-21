@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define BUFLEN 64
+#define BUFLEN 22
 #define SERVER_IP "10.0.24.243"
 #define PORT 7777
 
@@ -48,13 +48,12 @@ int main(void) {
    }*/
    //close(s);
 
-   pthread_t one, two;
+   /*pthread_t one, two;
    if(pthread_create(&one, NULL, send_packets, NULL)) {
       printf("Thread error\n");
    }
-   pthread_create(&two, NULL, send_packets, NULL);
-   //send_packets(NULL);
-   while(1);
-   
+   pthread_create(&two, NULL, send_packets, NULL);*/
+   send_packets(NULL);
+
    return 0;
 }

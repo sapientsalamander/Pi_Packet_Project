@@ -73,6 +73,22 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
    def find_next_input(self, list_chars, index):
       return self._find_input(list_chars, index, 1)
   
+   def wait_to_continue(self):
+      
+      while True:
+         if self.is_pressed(self.SELECT):
+            break
+         if self.is_pressed(self.UP):
+            break
+         if self.is_pressed(self.DOWN):
+            break
+         if self.is_pressed(self.LEFT):
+            break
+         if self.is_pressed(self.RIGHT):
+            break
+         else:
+            pass
+   
    def get_input_list(self, list_vals):
       index = 0;
       self.blink(False)
@@ -93,14 +109,26 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
       return list_vals[index] 
             
 
-   def get_input_format(self, lcd_format):
+   def get_input_format(self, lcd_format, default=''):
       list_chars = []
       i = 0
       while i < len(lcd_format):
          advance, char = self.parse_char(lcd_format[i:i+2])
          i += advance
          list_chars.append(char)
-   
+
+      i = 0
+      cur_default = 0
+      while i < len(list_chars):
+         cur_value_type = list_chars[i].value_type
+         if cur_value_type in self.Value_Arrays:
+            if default[cur_default] in self.Value_Arrays[cur_value_type]:
+               list_chars[i].value = default[cur_default]
+               i += 1
+            cur_default += 1
+         else:
+            i += 1
+
       index = self.find_next_input(list_chars, -1)
       if index == -1:
          print 'Enter a format, dummy'
