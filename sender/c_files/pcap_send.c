@@ -1,6 +1,7 @@
+#include <arpa/inet.h>
 #include <pcap.h>
 #include <pthread.h>
-#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,20 @@
 /* The buffer that will be used to hold the packet that Python sends over,
  * must be big enough to gurantee that it does not overflow (obviously). */
 #define PACKET_BUFF_LEN 2048
+
+#define SEASIDE_PACKET      0
+#define SEASIDE_START       1
+#define SEASIDE_STOP        2
+#define SEASIDE_SLEEP_TIME  3
+
+/* Struct to hold the info that we receive from the Python side. The type
+ * refers to the type of data that it holds (see above defines), and the size
+ * member is the size of the data that it receives. */
+typedef struct {
+    uint8_t type;
+    uint16_t size;
+    uint8_t *data;
+} __attribute__((packed)) SEASIDE;
 
 /* These next few declarations are for the Python socket that we will be
  * opening, so we can redirect any incoming packets to the Python UI. */
@@ -39,8 +54,8 @@ static pcap_t *pcap;
  * packets to send, and we need to store these new packets without corrupting
  * a send, so we store them in temporary variables while the sending function
  * finishes up, and then we sync them. */
-static u_char packet[PACKET_BUFF_LEN];
-static u_char packet_temp[PACKET_BUFF_LEN];
+static uint8_t packet[PACKET_BUFF_LEN];
+static uint8_t packet_temp[PACKET_BUFF_LEN];
 intptr_t packet_len;
 intptr_t packet_len_temp;
 
@@ -48,6 +63,9 @@ intptr_t packet_len_temp;
  * thread will spam the receiving Pi with as many packets as it can send.
  * If it turns false, it will stop sending packets. */
 static volatile unsigned int spam_packets = 0;
+
+/* How long we should wait in between each sent packet. */
+static uint8_t sleep_time = 1;
 
 /* Initializes the socket that will be used to receive packet info from
  * the Python program. It binds to the file specified as PYTHON_SOCKET,
@@ -112,11 +130,16 @@ initialize_pcap(void)
 void *
 send_packets(void * unused)
 {
+    if (packet == NULL) {
+        printf("Cannot send an empty packet\n");
+        return unused;
+    }
+
     int ret;
 
     while (spam_packets && (ret = pcap_inject(pcap, packet, packet_len) > 0)) {
-        printf("Sent a packet\n");
-        sleep(1);
+        printf(".");
+        sleep(sleep_time);
     }
     if (ret <= 0) {
         fprintf(stderr, "Error in pcap_inject(), returned %d\n", ret);
@@ -128,35 +151,61 @@ send_packets(void * unused)
  * receiving Pi. When it gathers all the information for it, such as
  * destination, data, speed, etc. it starts sending the packet. */
 void
-listen_packets(void)
+listen_packet_info(void)
 {
-    while(1) {
+    while (1) {
         while((packet_len_temp = 
                recv(python_fd, packet_temp, PACKET_BUFF_LEN, 0)) <= 0);
 
-        if (spam_packets > 0) {
-            (void) __sync_fetch_and_sub(&spam_packets, 1);
-        }
+        SEASIDE seaside_header;
+        const SEASIDE *ss_temp = (SEASIDE *) 0;
+        const int header_size = sizeof(SEASIDE) - sizeof(ss_temp->data);
+        memcpy(&seaside_header, packet_temp, header_size);
+        seaside_header.data = packet_temp + header_size;
 
-        printf("Received packet, size[%d].\n", packet_len_temp);
+        // Byte ordering
+        seaside_header.size = ntohs(seaside_header.size);
+
+        //seaside_header.type = packet_temp[0];
+        //seaside_header.size = ntohs(*(uint16_t *) (packet_temp + 1));
+        //seaside_header.data = packet_temp + 3;
+
+        printf("Type: [%d], size: [%d]\n", seaside_header.type, seaside_header.size);
         for (int i = 0; i < packet_len_temp; ++i) {
             printf("%i ", packet_temp[i]);
         }
+        printf("\n");
 
-        printf("Spam packet equals %u\n", spam_packets);
+        switch (seaside_header.type) {
+        /* An Ethernet frame was received. Update our packet to reflect it. */
+        case SEASIDE_PACKET:
+            memcpy(packet, seaside_header.data, seaside_header.size);
+            packet_len = seaside_header.size;
+            break;
 
-        memcpy(packet, packet_temp, packet_len_temp);
-        packet_len = packet_len_temp;
-        for (int i = 0; i < packet_len; ++i) {
-            printf("%i ", packet[i]);
+        /* We should start sending, if not already sending. */
+        case SEASIDE_START:
+            if (spam_packets < 1) {
+                (void) __sync_add_and_fetch(&spam_packets, 1);
+                pthread_create(&send_thread, NULL, send_packets, NULL);
+            }
+            break;
+
+        /* We should stop sending, if we have not already stopped. */
+        case SEASIDE_STOP:
+            if (spam_packets > 0) {
+                (void) __sync_sub_and_fetch(&spam_packets, 1);
+                (void) pthread_join(send_thread, NULL);
+            }
+            break;
+
+        /* Change the sleep time to attempt to reach a target bandwidth. */
+        case SEASIDE_SLEEP_TIME:
+            sleep_time = seaside_header.data[0]; //TODO: Change length to accurately reflect sleep_time
+            break;
         }
-
-        (void) pthread_join(send_thread, NULL);
-        if (spam_packets < 1) {
-            (void) __sync_fetch_and_add(&spam_packets, 1);
-        }
-        pthread_create(&send_thread, NULL, send_packets, NULL);
     }
+    printf("Broke out of loop\n");
 }
 
 /* Initializes pcap and the socket, and then sends the packet that was
@@ -173,7 +222,7 @@ main(void)
         return -1;
     }
     printf("Successfully initialized everything.\n");
-    listen_packets();
+    listen_packet_info();
     close(python_fd);
     pcap_close(pcap);
 }
