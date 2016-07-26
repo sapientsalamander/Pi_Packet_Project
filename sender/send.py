@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
-import time
 import fcntl
 import sys
-import socket
 
-#Lock to only allow one instance of this program to run
+# Lock to only allow one instance of this program to run
+# Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
+# it. If it is already locked, then another instance is running, and this
+# instance of the programs exits. If not, it successfully locks it and
+# continues running.
 pid_file = '/tmp/send.pid'
 fp = open(pid_file, 'w')
 try:
@@ -13,54 +15,134 @@ try:
 except IOError:
    print 'An instance of this program is already running'
    sys.exit(0)
-#End of lock code
+# End of lock code.
 
-from scapy.all import *
-import Adafruit_CharLCD as LCD
+import os
+import socket
+import time
+import thread
 
-lcd = LCD.Adafruit_CharLCDPlate()
+import psutil
+import misc_functions
+import scapy.all as scapy
+import lcd_input as LCD
+
+lcd = LCD.LCD_Input_Wrapper()
 lcd.set_color(0,0,0)
 
-def to_int_array(pac):
-   tmp = str(pac).encode('hex')
-   tmp = [x+y for x,y in zip(tmp[0::2], tmp[1::2])]
-   return map(lambda x : int(x,16), tmp)
-# Ether(dst='b8:27:eb:61:1b:d4',src='b8:27:eb:26:60:d0')
-packet = IP(version=4,id=1,ttl=64,proto='udp',src='10.0.24.242',dst='10.0.24.243') / \
-         UDP(sport=666,dport=666) / \
-         Raw('This is a message. End')
+# An LCD lock to ensure that the configuration and statistics threads do not
+# attempt to write to the LCD at the same time.
+lcd_lock = thread.allocate_lock()
 
-number_packets_sent = 0
-select_just_pressed = False
+screen_output = ['','']
 
-SOCKET_ADDR = '/tmp/send_socket'
-c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-while True:
-   try:
-      c_socket.connect(SOCKET_ADDR)
-      break
-   except:
+def configure_packet():
+   lcd_lock.acquire()
+   ip = lcd.get_input_format('IP address\n%i%i%i.%i%i%i.%i%i%i.%i%i%i', '010.000.024.243')[11:]
+   ip = '.'.join([str(int(octal)) for octal in ip.split('.')])
+
+   src_port = lcd.get_input_format('Source Port\n%i%i%i%i', '0666' )
+   src_port = int(src_port[12:])
+   
+   dst_port = lcd.get_input_format('Destination Port\n%i%i%i%i', '0666')
+   dst_port = int(dst_port[17:])
+   
+   dstMAC = lcd.get_input_format('MAC Address\n%h%h%h%h%h%h-%h%h%h%h%h%h', 'b827eb-611bd4')
+   dstMAC = dstMAC[12:]
+   dstMAC = misc_functions.split_MAC(dstMAC)
+   
+   msg_options = ["Here's a message\nFinis", 'Hello, world!   \n     ',
+               '-Insert message\n here-'] 
+   
+   msg = lcd.get_input_list(msg_options)
+
+   lcd_lock.release()
+
+   packet = scapy.Ether(dst = dstMAC) /\
+            scapy.IP(dst = ip) /\
+            scapy.UDP(sport = src_port, dport = dst_port) /\
+            scapy.Raw(msg)
+   return packet
+  
+def display_loop():
+   while True:
+      for i in xrange(2):
+         print_line(screen_output[i], i)
+      time.sleep(0.7)
+
+def print_line(message, line):
+   """Print message to screen on line, multithreading safe.
+
+   Locks the LCD so that only one thread can write to it at a time.
+   Also ensures that writing to a line won't clear the entire screen.
+   """
+   # Pad with spaces, manually clearing the line on LCD.
+   message = message.ljust(20)
+
+   lcd_lock.acquire()
+
+   lcd.set_cursor(0,line)
+   lcd.message(message)
+
+   lcd_lock.release()
+
+def update_statistics_loop(tx_prev, time_prev):
+   number_packet_sent = 0
+   while True:
+      tx_cur = misc_functions.get_tx()
+      time_cur = time.time()
+   
+      bw = (tx_cur - tx_prev) / (time_cur - time_prev) * 8   
+      units = []
+
+      i = 0
+      while bw >= 1000:
+         bw = bw / 1000
+         i += 1
+   
+      cpu = psutil.cpu_percent()
+
+      screen_output[0] = 'Bw:%2.1f' % (bw)
+      screen_output[1] = 'CPU:%2.1f' % (cpu)
       time.sleep(1)
 
-def send_packet(pac):
-   c_socket.send(bytearray(to_int_array(pac)))
+if __name__ == '__main__':
+   c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+   SOCKET_ADDR = '/tmp/send_socket'
+   while True:
+      try:
+         c_socket.connect(SOCKET_ADDR)
+         break
+      except:
+         time.sleep(1)
+         print 'Trying to connect...'
 
-send_packet(packet)
+   print 'Connected to socket'
+   
+   options = ['Reconfigure', 'Statistics', 'Packet Info']
 
-def print_lcd():
-   lcd.set_cursor(0,0)
-   lcd.clear()
-   lcd.message('# of packets\nsent: ' + str(number_packets_sent))
+   tx_prev = misc_functions.get_tx()
+   time_prev = time.time()
 
-print_lcd()
-
-"""while(True):
-   if lcd.is_pressed(LCD.SELECT):
-      if not select_just_pressed:
-         select_just_pressed=True
-         number_packets_sent += 1
-         print_lcd()
-         send(packet, iface='eth0')
-   else:
-      select_just_pressed = False
-"""
+   try:
+      thread.start_new_thread(display_loop, ())
+      thread.start_new_thread(update_statistics_loop, (tx_prev, time_prev))
+   except:
+      print 'Error: ', sys.exc_info()[0]
+   while True:
+      if lcd.is_pressed(LCD.SELECT):
+         packet = configure_packet()
+         misc_functions.send_packet(packet, c_socket)
+      time.sleep(0.5)
+   #packet = configure_packet()
+   #misc_functions.send_packet(packet, c_socket)
+   #while True:
+   #   i = lcd.get_input_list(options)
+   #
+   #   if i == 0:
+   #      packet = configure_packet()
+   #      misc_functions.send_packet(packet, c_socket)
+   #   elif i == 1:
+   #      tx_prev, time_prev = calculate_statistics(tx_prev, time_prev)
+   #   elif i == 2:
+   #      break
