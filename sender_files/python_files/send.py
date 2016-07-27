@@ -9,9 +9,9 @@ import time
 import thread
 
 import psutil
-import misc_functions
 import scapy.all as scapy
-import lcd_input as LCD
+from shared_files import lcd_input as LCD
+from shared_files import shared_functions
 
 lcd = LCD.LCD_Input_Wrapper()
 lcd.set_color(0,0,0)
@@ -24,7 +24,7 @@ lcd_lock = thread.allocate_lock()
 screen_output = ['','']
 packet = scapy.Ether()
 
-SEASIDE = misc_functions.enums('PACKET', 'START', 'STOP', 'SLEEP_TIME')
+SEASIDE = shared_functions.enums('PACKET', 'START', 'STOP', 'SLEEP_TIME')
 
 def set_lcd_color(r,g,b):
    lcd_lock.acquire()
@@ -55,7 +55,7 @@ def configure_packet():
    dstMAC = lcd.get_input_format('MAC Address\n%h%h%h%h%h%h-%h%h%h%h%h%h',
                                  'b827eb-611bd4')
    dstMAC = dstMAC[12:]
-   dstMAC = misc_functions.split_MAC(dstMAC)
+   dstMAC = shared_functions.split_MAC(dstMAC)
    
    msg_options = ["Here's a message\nFinis", 'Hello, world!',
                '-Insert message\n here-', 'This message is\nthe longest one.'] 
@@ -94,7 +94,7 @@ def configure_packet():
    if size < 64:
       print 'Warning: packet is below minimum size.'   
  
-   # seconds, useconds = misc_functions.get_speed(pps)
+   # seconds, useconds = shared_functions.get_speed(pps)
    return (packet, seconds)# , useconds)
 
 def display_loop():
@@ -128,12 +128,12 @@ def update_statistics_loop():
    Updates values in 
    """
    time_cur = time.time()
-   tx_cur = misc_functions.get_tx()
+   tx_cur = shared_functions.get_rx_tx_bytes('tx')
    while True:
       tx_prev = tx_cur
       time_prev = time_cur      
 
-      tx_cur = misc_functions.get_tx()
+      tx_cur = shared_functions.get_rx_tx_bytes('tx')
       time_cur = time.time()
 
       d_bytes = tx_cur - tx_prev
@@ -207,27 +207,27 @@ if __name__ == '__main__':
       if lcd.is_pressed(LCD.SELECT): # Configure packet
          packet, seconds = configure_packet() # Removed useconds for now. 
          
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
          time.sleep(1) # TODO: Fix needing this sleep function
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.PACKET, pkt=packet)
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.PACKET, pkt=packet)
 
       elif lcd.is_pressed(LCD.UP): # Begin sending
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.START)
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.START)
          is_sending = True
       elif lcd.is_pressed(LCD.RIGHT): # Reset delay to user's number of seconds
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
          set_lcd_color(0, 1, 0) # Flash green 
          time.sleep(0.1)
          set_lcd_color(0, 0, 0)
          led_state = (0, 1, 0)
       elif lcd.is_pressed(LCD.LEFT): # Remove delay
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME) 
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME) 
          set_lcd_color(1, 0, 0) # Flash red
          time.sleep(0.1)
          set_lcd_color(0, 0, 0)
          led_state = (1, 0, 0)
       elif lcd.is_pressed(LCD.DOWN): # Stop sending
-         misc_functions.send_SEASIDE(c_socket, SEASIDE.STOP)
+         shared_functions.send_SEASIDE(c_socket, SEASIDE.STOP)
          is_sending = False
       if is_sending:
          set_lcd_color(*led_state)
