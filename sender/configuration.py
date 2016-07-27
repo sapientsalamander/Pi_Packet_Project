@@ -40,7 +40,7 @@ def configure_packet():
    dstMAC = dstMAC[12:]
    dstMAC = misc_functions.split_MAC(dstMAC)
    
-   msg_options = ["Here's a message\nFinis", 'Hello, world!   \n    ',
+   msg_options = ["Here's a message\nFinis", 'Hello, world!   \n     ',
                '-Insert message\n here-'] 
    
    msg = lcd.get_input_list(msg_options)
