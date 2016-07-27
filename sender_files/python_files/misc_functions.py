@@ -10,12 +10,10 @@ def int_array(pac):
 def split_MAC(address):
    """Converts a MAC address from form ffffff-ffffff to ff:ff:ff:ff:ff:ff"""
    mac = []
-   address = address.replace("-", "")
+   address = address.replace('-', '')
    for i in xrange(0, len(address), 2):
       mac.append(address[i:i+2])
-      mac.append(":")
-   mac = mac[:-1]
-   return "".join(mac)
+   return ':'.join(mac)
 
 def send_SEASIDE(c_socket, SEASIDE_flag, pkt='', sleep_time=0):
    """Sends a SEASIDE packet through the socket.

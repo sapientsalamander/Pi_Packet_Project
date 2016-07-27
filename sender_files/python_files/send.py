@@ -22,8 +22,14 @@ lcd.clear()
 lcd_lock = thread.allocate_lock()
 
 screen_output = ['','']
+packet = scapy.Ether()
 
 SEASIDE = misc_functions.enums('PACKET', 'START', 'STOP', 'SLEEP_TIME')
+
+def set_lcd_color(r,g,b):
+   lcd_lock.acquire()
+   lcd.set_color(r,g,b)
+   lcd_lock.release()
 
 def configure_packet():
    """Configure an Ether/IP/UDP/Raw packet with user provided values.
@@ -40,10 +46,10 @@ def configure_packet():
 
    ip = '.'.join([str(int(octal)) for octal in ip.split('.')])
 
-   src_port = lcd.get_input_format('Source Port\n%i%i%i%i', '0666' )
+   src_port = lcd.get_input_format('Source Port\n%i%i%i%i', '4321' )
    src_port = int(src_port[12:])
    
-   dst_port = lcd.get_input_format('Destination Port\n%i%i%i%i', '0666')
+   dst_port = lcd.get_input_format('Destination Port\n%i%i%i%i', '4321')
    dst_port = int(dst_port[17:])
    
    dstMAC = lcd.get_input_format('MAC Address\n%h%h%h%h%h%h-%h%h%h%h%h%h',
@@ -57,8 +63,8 @@ def configure_packet():
    msg = lcd.get_input_list(msg_options)
    
    
-   packet = scapy.Ether(dst = dstMAC) /\
-            scapy.IP(dst = ip) /\
+   packet = scapy.Ether(src = 'b8:27:eb:26:60:d0', dst = dstMAC) /\
+            scapy.IP(src = '10.0.24.242', dst = ip) /\
             scapy.UDP(sport = src_port, dport = dst_port)
    
    psize = len(packet) + len(msg)
@@ -115,18 +121,24 @@ def print_line(message, line):
 
    lcd_lock.release()
 
-def update_statistics_loop(tx_prev, time_prev):
+def update_statistics_loop():
    """Update the values of bandwidth and CPU use.
 
    Calculates bandwidth using change in bytes received over time. Calculates CPU using psutil. 
    Updates values in 
    """
-
+   time_cur = time.time()
+   tx_cur = misc_functions.get_tx()
    while True:
+      tx_prev = tx_cur
+      time_prev = time_cur      
+
       tx_cur = misc_functions.get_tx()
       time_cur = time.time()
-   
-      bw = (tx_cur - tx_prev) / (time_cur - time_prev) * 8
+
+      d_bytes = tx_cur - tx_prev
+      num_packets = d_bytes / (len(packet) + 8)
+      bw = (num_packets * len(packet)) / (time_cur - time_prev) * 8
       units = ['bps', 'Kbps', 'Mbps']
 
       i = 0
@@ -182,14 +194,15 @@ if __name__ == '__main__':
    
    options = ['Reconfigure', 'Statistics', 'Packet Info']
 
-   tx_prev = misc_functions.get_tx()
-   time_prev = time.time()
-
    try:
       thread.start_new_thread(display_loop, ())
-      thread.start_new_thread(update_statistics_loop, (tx_prev, time_prev))
+      thread.start_new_thread(update_statistics_loop, ())
    except:
       print 'Error: ', sys.exc_info()[0]
+
+   led_state = (0, 1, 0)
+   is_sending = False
+
    while True:
       if lcd.is_pressed(LCD.SELECT): # Configure packet
          packet, seconds = configure_packet() # Removed useconds for now. 
@@ -200,10 +213,24 @@ if __name__ == '__main__':
 
       elif lcd.is_pressed(LCD.UP): # Begin sending
          misc_functions.send_SEASIDE(c_socket, SEASIDE.START)
+         is_sending = True
       elif lcd.is_pressed(LCD.RIGHT): # Reset delay to user's number of seconds
          misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
+         set_lcd_color(0, 1, 0) # Flash green 
+         time.sleep(0.1)
+         set_lcd_color(0, 0, 0)
+         led_state = (0, 1, 0)
       elif lcd.is_pressed(LCD.LEFT): # Remove delay
          misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME) 
+         set_lcd_color(1, 0, 0) # Flash red
+         time.sleep(0.1)
+         set_lcd_color(0, 0, 0)
+         led_state = (1, 0, 0)
       elif lcd.is_pressed(LCD.DOWN): # Stop sending
          misc_functions.send_SEASIDE(c_socket, SEASIDE.STOP)
+         is_sending = False
+      if is_sending:
+         set_lcd_color(*led_state)
+      else:
+         set_lcd_color(0, 0, 0)
       time.sleep(0.3)
