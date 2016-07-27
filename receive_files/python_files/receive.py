@@ -2,41 +2,20 @@
 
 import fcntl
 import sys
-
-# Lock to only allow one instance of this program to run
-# Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
-# it. If it is already locked, then another instance is running, and this
-# instance of the programs exits. If not, it successfully locks it and
-# continues running.
-pid_file = '/tmp/send.pid'
-fp = open(pid_file, 'w')
-try:
-   fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except IOError:
-   print 'An instance of this program is already running'
-   sys.exit(0)
-# End of lock code.
-
+import os
 import socket
 import time
 import thread
-import os
 
-from scapy.all import *
+import scapy.all as scapy
 import psutil
 import Adafruit_CharLCD as LCD
-
-# Before enums were introduced in Python, this was one such method of 'faking'
-# an enum. It takes a list of identifiers, zips it from 0..n-1, where n is the
-# number of identifiers passed in, and uses the type function to generate a new
-# class with the aforementioned identifiers as class variables.
-def enums(*sequential):
-   enums = dict(zip(sequential, range(len(sequential))))
-   return type('Enum', (), enums)
+from shared_files import shared_functions
 
 # Creating the class, called Screens, with variables listed below, each
 # holding a value, starting from 0 to n-1.
-Screens = enums('Summary', 'Payload', 'Source', 'CPU', 'Num')
+Screens = shared_functions.enums(
+            'Summary', 'Payload', 'Source', 'CPU', 'Num')
 
 # Used to determine which screen should currently be shown.
 cur_screen = Screens.Summary
@@ -46,9 +25,6 @@ cur_screen = Screens.Summary
 # each having two strings, representing line 0 and line 1 of the LCD for each
 # type of screen there is.
 screen_output = [['',''] for x in xrange(Screens.Num)]
-
-# Abbreviations for bandwidth measuring.
-BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps')
 
 # The file used to initialize the socket to communicate with C program.
 SOCKET_ADDR = '/tmp/receive_socket'
@@ -76,25 +52,11 @@ def print_line(message, line):
    message = message.ljust(20)
 
    lcd_lock.acquire()
-
+   
    lcd.set_cursor(0,line)
    lcd.message(message)
 
    lcd_lock.release()
-
-def get_rx_bytes():
-   """Return the total number of rx_bytes since startup.
-
-   On Linux machines, there is a directory (/sys/class/net/...) that
-   contains networking information about different interfaces, and we just
-   pull the number of bytes received over eth0 since startup.
-
-   Returns:
-      The number of bytes received over eth0 since startup.
-   """
-   with open('/sys/class/net/eth0/statistics/rx_bytes', 'r') as file:
-      data = file.read()
-   return int(data)
 
 def update_packet_info(packet, number_packets_received):
    """Update and print packet information to LCD, including payload, 
@@ -109,7 +71,7 @@ def update_packet_info(packet, number_packets_received):
    # Grabs the payload from the scapy packet. If none is available,
    # or if packet is not a scapy packet, then it cannot parse the payload.
    try:
-      string_payload = packet.getlayer(Raw).load
+      string_payload = packet.getlayer(scapy.Raw).load
       index = string_payload.find('\n')
       if index == -1:
          screen_output[Screens.Payload][0] = string_payload
@@ -120,17 +82,18 @@ def update_packet_info(packet, number_packets_received):
       screen_output[Screens.Payload][0] = 'No payload'
 
    # IP address
-   screen_output[Screens.Source][0] = packet.getlayer(IP).src
+   screen_output[Screens.Source][0] = packet.getlayer(scapy.IP).src
    # MAC address
-   eth_out = packet.getlayer(Ether).src
+   eth_out = packet.getlayer(scapy.Ether).src
    screen_output[Screens.Source][1] = eth_out.replace(':', '')
 
 def update_statistics_loop():
    """Calculate the bandwidth and cpu usage (can be expanded to include
    more info) and displays it on the LCD.
    """
-   rx_prev = get_rx_bytes()
+   rx_prev = shared_functions.get_rx_tx_bytes('rx')
    time_prev = time.time()
+
    while True:
       screen_output[Screens.CPU][0] = 'CPU Usage: %4.1f%%' % \
                                       (psutil.cpu_percent())
@@ -138,27 +101,27 @@ def update_statistics_loop():
       screen_output[Screens.CPU][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
                                       tuple(cores)
 
-      rx_cur = get_rx_bytes()
+      rx_cur = shared_functions.get_rx_tx_bytes('rx')
       time_cur = time.time()
 
       # Bandwidth (bits/s) = (delta bytes / delta time) * 8 bits / byte.
       bandwidth = (rx_cur - rx_prev)/(time_cur - time_prev) * 8
+      bandwidth, bw_unit = shared_functions.calculate_bandwidth(bandwidth)
 
-      # If bandwidth > 1000, increases size of units (b -> Kb -> Mb).
-      i = 0
-      while bandwidth >= 1000:
-         bandwidth /= 1000.0
-         i += 1
+      lcd_lock.acquire()
+
+      shared_functions.display_LED(bandwidth, bw_unit)
+
+      lcd_lock.release()
 
       # Ex. Bw: 30.5 Kbps.
-      message = 'Bw:%5.1f %s' % (bandwidth, BDWTH_ABBRS[i])
+      message = 'Bw:%5.1f %s' % (bandwidth, bw_unit)
 
       screen_output[Screens.Summary][1] = message
 
       rx_prev = rx_cur
       time_prev = time_cur
 
-      # Only update statistics once a second.
       time.sleep(1)
 
 def listen_packets_loop():
@@ -197,7 +160,7 @@ def listen_packets_loop():
       print 'Received packet [%d]' % (number_packets_received)
 
       # Parse packet with scapy so we can pull it apart easier.
-      packet = Ether(c_input)
+      packet = scapy.Ether(c_input)
 
       update_packet_info(packet, number_packets_received)
 
@@ -219,9 +182,24 @@ def input_loop():
          cur_screen = Screens.CPU
 
 if __name__ == '__main__':
+   # Lock to only allow one instance of this program to run
+   # Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
+   # it. If it is already locked, then another instance is running, and this
+   # instance of the programs exits. If not, it successfully locks it and
+   # continues running.
+   pid_file = '/tmp/send.pid'
+   fp = open(pid_file, 'w')
+   try:
+      fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+   except IOError:
+      print 'An instance of this program is already running'
+      sys.exit(0)
+   # End of lock code.
+   
    # Initializes LCD and turn off LED.
    lcd = LCD.Adafruit_CharLCDPlate()
    lcd.set_color(0,0,0)
+   lcd.clear()
 
    screen_output[Screens.Summary][0] = 'Awaiting packets'
 

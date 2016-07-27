@@ -92,7 +92,7 @@ run_pcap()
     bpf_u_int32 pNet;
     
     pcap_lookupnet(DEVICE, &pNet, &pMask, errbuf);
-    descr = pcap_open_live(DEVICE, BUFSIZ, 0, -1, errbuf);
+    descr = pcap_open_live(DEVICE, BUFSIZ, 1, -1, errbuf);
     
     if (descr == NULL) {
         fprintf(stderr, "pcap_open_live() failed to open: %s.\n", errbuf);
