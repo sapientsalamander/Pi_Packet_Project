@@ -52,7 +52,7 @@ callback(u_char *user,
 /* Initialize the Python socket by attemping to open a file descriptor
  * that has already been created by the Python side. */
 int
-initialize_socket()
+initialize_socket(void)
 {
     /*Initialize the type of socket. */
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -70,7 +70,7 @@ initialize_socket()
      * connect (in the case that the Python program has not yet started). */
     const int size_sock = sizeof(struct sockaddr_un);
     const struct sockaddr *pointer_sock = (struct sockaddr *) &address;
-    while(connect(socket_fd, pointer_sock, size_sock) < 0) {
+    while (connect(socket_fd, pointer_sock, size_sock) < 0) {
         printf("connect() failed. Check that the Python program is up.\n");
         sleep(1);
     }
@@ -83,15 +83,15 @@ initialize_socket()
  * finished, we run pcap_loop, which takes over this thread and calls the
  * handler that we specified whenever it sniffs any incoming packet. */
 int
-run_pcap()
+run_pcap(void)
 {
     pcap_t *descr;
     
     struct bpf_program fp;
-    bpf_u_int32 pMask;
-    bpf_u_int32 pNet;
+    bpf_u_int32 p_mask;
+    bpf_u_int32 p_net;
     
-    pcap_lookupnet(DEVICE, &pNet, &pMask, errbuf);
+    pcap_lookupnet(DEVICE, &p_net, &p_mask, errbuf);
     descr = pcap_open_live(DEVICE, BUFSIZ, 1, -1, errbuf);
     
     if (descr == NULL) {
@@ -99,7 +99,7 @@ run_pcap()
         return -1;
     }
     
-    if (pcap_compile(descr, &fp, PCAP_FILTER, 0, pNet) == -1) {
+    if (pcap_compile(descr, &fp, PCAP_FILTER, 0, p_net) == -1) {
         fprintf(stderr, "pcap_compile() failed.\n");
         return -1;
     }
@@ -140,7 +140,7 @@ main(void)
      * as a reference in case we need any of it later. */
     /*pthread_t python_threads, python_update;
     int rc = pthread_create(&python_threads, NULL, initialize, NULL);
-    if(rc) {
+    if (rc) {
         printf("Error %d\n", rc);
         exit(-1);
     }
