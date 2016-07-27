@@ -104,18 +104,19 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
          i += advance
          list_chars.append(char)
 
-      i = 0
-      cur_default = 0
-      while i < len(list_chars):
-         cur_value_type = list_chars[i].value_type
-         try:
-            index = [val[0] for val in self.Value_Types].index(cur_value_type)
-            if default[cur_default] in self.Value_Types[index][2]:
-               list_chars[i].value = default[cur_default]
+      if default != '':
+         i = 0
+         cur_default = 0
+         while i < len(list_chars):
+            cur_value_type = list_chars[i].value_type
+            try:
+               index = [val[0] for val in self.Value_Types].index(cur_value_type)
+               if default[cur_default] in self.Value_Types[index][2]:
+                  list_chars[i].value = default[cur_default]
+                  i += 1
+               cur_default += 1
+            except (ValueError):
                i += 1
-            cur_default += 1
-         except (ValueError):
-            i += 1
 
       index = self.find_next_input(list_chars, -1)
       if index == -1:
