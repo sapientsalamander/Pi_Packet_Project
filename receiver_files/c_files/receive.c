@@ -1,8 +1,5 @@
 #include <pcap.h>
 #include <pthread.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -25,21 +22,21 @@ static int socket_fd;
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
  * Used so that you don't have to declare an error buffer per function. */
-static char errbuf[PCAP_ERRBUF_SIZE] = {'\0'};
+static char errbuf[PCAP_ERRBUF_SIZE];
 
 /* Function that is invoked whenever a packet is received. Takes in a
- * struct pcap_pkthdr, which contains information about the length of
+ * struct pcap_pkthdr, which contains information about the size of
  * the packet. It then sends the received packet to the Python socket
  * that we opened earlier. */
-void 
+void
 callback(u_char *user,
          const struct pcap_pkthdr *pkthdr,
          const u_char *packet)
 {
     static int count = 0; /* Total number of packets received. */
     /* Print general information about this packet. */
-    printf("User [%s], packet number [%d], length of portion [%d], "
-           "length of packet [%d].\n", 
+    printf("User [%s], packet number [%d], size of portion [%d], "
+           "size of packet [%d].\n", 
            user, ++count, pkthdr->caplen, pkthdr->len);
 
     /* Redirect the packet to the Python socket. */
@@ -51,7 +48,7 @@ callback(u_char *user,
 
 /* Initialize the Python socket by attemping to open a file descriptor
  * that has already been created by the Python side. */
-int
+static int
 initialize_socket(void)
 {
     /*Initialize the type of socket. */
@@ -82,7 +79,7 @@ initialize_socket(void)
 /* Initialize the pcap interface we will use to capture packets. When that's
  * finished, we run pcap_loop, which takes over this thread and calls the
  * handler that we specified whenever it sniffs any incoming packet. */
-int
+static int
 run_pcap(void)
 {
     pcap_t *descr;
@@ -136,15 +133,5 @@ main(void)
         return -1;
     }
 
-    /* Old stuff, was playing around with threads. Will leave here for now
-     * as a reference in case we need any of it later. */
-    /*pthread_t python_threads, python_update;
-    int rc = pthread_create(&python_threads, NULL, initialize, NULL);
-    if (rc) {
-        printf("Error %d\n", rc);
-        exit(-1);
-    }
-    sleep(1000);
-    initialize(NULL);*/
     return 0;
 }
