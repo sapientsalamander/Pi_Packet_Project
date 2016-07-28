@@ -1,8 +1,8 @@
-import shared_functions
+import conversions 
 import struct
 from enum import Enum
 
-SEASIDE_FLAGS = Enum('PACKET', 'START', 'STOP', 'DELAY', 'NUM_PACKETS')
+SEASIDE_FLAGS = Enum('SEASIDE_FLAGS', 'PACKET START STOP DELAY NUM_PACKETS', start=0)
 
 
 def send_SEASIDE(socket, SEASIDE_flag, data=None):
@@ -29,6 +29,6 @@ def send_SEASIDE(socket, SEASIDE_flag, data=None):
     # TODO: Ensure that len(data) will work for all inputs.
     SEASIDE_header = struct.pack('=bh', SEASIDE_flag, len(data))
     if type(data) is not list:
-        data = shared_functions.int_array(*data)
+        data = conversions.convert_packet_int_array(*data)
     SEASIDE_packet = bytearray(data)
     socket.send(SEASIDE_header + SEASIDE_packet)

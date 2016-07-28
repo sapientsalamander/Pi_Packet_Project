@@ -1,3 +1,5 @@
+import time
+
 def lock_and_display_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
     """Changes the LED color for different amounts of traffic.
 
@@ -31,3 +33,8 @@ def lock_and_print_lcd_line(lcd, lcd_lock, message, line):
     with lcd_lock:
         lcd.set_cursor(0, line)
         lcd.message(message)
+
+def flash_led(lcd, lcd_lock, r, g, b):
+    lock_and_set_led_color(lcd, lcd_lock, r, g, b)
+    time.sleep(0.1)
+    lock_and_set_led_color(lcd, lcd_lock, 0, 0, 0)

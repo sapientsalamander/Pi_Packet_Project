@@ -9,10 +9,10 @@ from Adafruit_CharLCD import *
 # allow for easy and generic input that can be reused.
 class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
 
-    Input_Type = Enum('Char', 'Int', 'Hex')
+    Input_Type = Enum('Input_Type', 'Char Int Hex', start=0)
 
-    Value_Types = ((Input_Type.Int, 'i', '0123456789'),
-                   (Input_Type.Hex, 'h', '0123456789abcdef'))
+    Value_Types = ((Input_Type.Int.value, 'i', '0123456789'),
+                   (Input_Type.Hex.value, 'h', '0123456789abcdef'))
 
     def get_value_tuple(self, key):
         for i in self.Value_Types:
