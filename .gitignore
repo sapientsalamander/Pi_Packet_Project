@@ -9,6 +9,14 @@
 
 !Makefile
 
+# Vim swap file
 *.swp
+
+# Object files
 *.o
+
+# Compiled Python files
 *.pyc
+
+# GNU Data File
+*.gcno
