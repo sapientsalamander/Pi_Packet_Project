@@ -1,7 +1,6 @@
 #include <arpa/inet.h>
 #include <pcap.h>
 #include <pthread.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,10 +27,11 @@
 /* Struct to hold the info that we receive from the Python side. The type
  * refers to the type of data that it holds (see above defines), and the size
  * member is the size of the data that it receives. */
+/* TODO: Rework the program so this struct doesn't have to be packed. */
 typedef struct {
-    uint8_t type;
-    uint16_t size;
-    uint8_t *data;
+    u_char type;
+    u_short size;
+    u_char *data;
 } __attribute__((packed)) SEASIDE;
 
 /* These next few declarations are for the Python socket that we will be
@@ -157,18 +157,19 @@ listen_packet_info(void)
         while((packet_len_temp = 
                recv(python_fd, packet_temp, PACKET_BUFF_LEN, 0)) <= 0);
 
+        /* TODO: Get rid of this ugly sizeof hack. */
         SEASIDE seaside_header;
         const SEASIDE *ss_temp = (SEASIDE *) 0;
         const int header_size = sizeof(SEASIDE) - sizeof(ss_temp->data);
         memcpy(&seaside_header, packet_temp, header_size);
         seaside_header.data = packet_temp + header_size;
 
-        // Byte ordering
-        seaside_header.size = ntohs(seaside_header.size);
+        /* Byte ordering */
+        seaside_header.size = seaside_header.size;
 
-        //seaside_header.type = packet_temp[0];
-        //seaside_header.size = ntohs(*(uint16_t *) (packet_temp + 1));
-        //seaside_header.data = packet_temp + 3;
+        /* seaside_header.type = packet_temp[0];
+        seaside_header.size = ntohs(*(uint16_t *) (packet_temp + 1));
+        seaside_header.data = packet_temp + 3; */
 
         printf("Type: [%d], size: [%d]\n", seaside_header.type, seaside_header.size);
         for (int i = 0; i < packet_len_temp; ++i) {
@@ -201,7 +202,8 @@ listen_packet_info(void)
 
         /* Change the sleep time to attempt to reach a target bandwidth. */
         case SEASIDE_SLEEP_TIME:
-            sleep_time = seaside_header.data[0]; //TODO: Change length to accurately reflect sleep_time
+            /* TODO: Change length to accurately reflect sleep_time. */
+            sleep_time = seaside_header.data[0];
             break;
         }
     }
