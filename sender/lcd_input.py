@@ -3,7 +3,10 @@
 import time
 from Adafruit_CharLCD import *
 
+# A wrapper around the Adafruit LCD library. This extends the functionality to
+# allow for easy and generic input that can be reused.
 class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
+
    # Before enums were introduced in Python, this was one such method of 
    # 'faking' an enum. It takes a list of identifiers, zips it from 0..n-1,
    # where n is the number of identifiers passed in, and uses the type 
@@ -15,19 +18,23 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
 
    Input_Type = enums('Char', 'Int', 'Hex')
 
-   Value_Types = { 'i' : (Input_Type.Int, 2),
-                   'h' : (Input_Type.Hex, 2) }
+   Value_Types = ( (Input_Type.Int, 'i', '0123456789'),
+                   (Input_Type.Hex, 'h', '0123456789abcdef') )
 
-   Value_Arrays = { Input_Type.Int : '0123456789',
-                    Input_Type.Hex : '0123456789abcdef' }
+   def get_value_tuple(self, key):
+      for i in self.Value_Types:
+         if key in i:
+            return i
+      return None
 
    class Input_Char(object):
       value = ' '
       value_type = ''
 
    def _inc_or_dec(self, value, value_type, delta):
-      values_array = self.Value_Arrays[value_type]
-      return values_array[(values_array.index(value) + delta) % len(values_array)]
+      values_array = self.get_value_tuple(value_type)[2]
+      index = (values_array.index(value) + delta) % len(values_array)
+      return values_array[index]
 
    def increment(self, value):
       return self._inc_or_dec(value.value, value.value_type, 1)
@@ -39,16 +46,13 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
       char_type = self.Input_Char()
       advances = 0
       try:
-         value_type = self.Value_Types[input_format[1]]
-         char_type.value_type = value_type[0]
+         char_type.value_type = self.get_value_tuple(input_format[1])[0]
          char_type.value = '0'
-         advances = value_type[1]
-      except (IndexError, KeyError):
+      except (TypeError):
          print 'Cannot parse format; unknown identifier after "%"'
          char_type.value_type = self.Input_Type.Char
          char_type.value = input_format[0]
-         advances = 2
-      return (advances, char_type)
+      return (2, char_type)
 
    def parse_char(self, input_format):
       char_type = self.Input_Char()
@@ -73,22 +77,6 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
    def find_next_input(self, list_chars, index):
       return self._find_input(list_chars, index, 1)
   
-   def wait_to_continue(self):
-      
-      while True:
-         if self.is_pressed(self.SELECT):
-            break
-         if self.is_pressed(self.UP):
-            break
-         if self.is_pressed(self.DOWN):
-            break
-         if self.is_pressed(self.LEFT):
-            break
-         if self.is_pressed(self.RIGHT):
-            break
-         else:
-            pass
-   
    def get_input_list(self, list_vals):
       index = 0;
       self.blink(False)
@@ -107,7 +95,6 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
          self.clear()
          self.message(list_vals[index])
       return list_vals[index] 
-            
 
    def get_input_format(self, lcd_format, default=''):
       list_chars = []
@@ -121,12 +108,13 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
       cur_default = 0
       while i < len(list_chars):
          cur_value_type = list_chars[i].value_type
-         if cur_value_type in self.Value_Arrays:
-            if default[cur_default] in self.Value_Arrays[cur_value_type]:
+         try:
+            index = [val[0] for val in self.Value_Types].index(cur_value_type)
+            if default[cur_default] in self.Value_Types[index][2]:
                list_chars[i].value = default[cur_default]
                i += 1
             cur_default += 1
-         else:
+         except (ValueError):
             i += 1
 
       index = self.find_next_input(list_chars, -1)

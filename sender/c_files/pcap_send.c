@@ -131,9 +131,8 @@ void
 listen_packets(void)
 {
     while(1) {
-        initialize_socket();
         while((packet_len_temp = 
-               recv(python_fd, packet_temp, PACKET_BUFF_LEN, 0)) == 0);
+               recv(python_fd, packet_temp, PACKET_BUFF_LEN, 0)) <= 0);
 
         if (spam_packets > 0) {
             (void) __sync_fetch_and_sub(&spam_packets, 1);
@@ -157,7 +156,6 @@ listen_packets(void)
             (void) __sync_fetch_and_add(&spam_packets, 1);
         }
         pthread_create(&send_thread, NULL, send_packets, NULL);
-        close(python_fd);
     }
 }
 
@@ -170,10 +168,10 @@ main(void)
         printf("Error in initialize_pcap().\n");
         return -1;
     }
-    /*if (initialize_socket()) {
+    if (initialize_socket()) {
         printf("Error in initialize_socket().\n");
         return -1;
-    }*/
+    }
     printf("Successfully initialized everything.\n");
     listen_packets();
     close(python_fd);
