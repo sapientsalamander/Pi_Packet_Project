@@ -1,4 +1,4 @@
-import conversions 
+import conversions
 import struct
 from enum import Enum
 

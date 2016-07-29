@@ -29,6 +29,23 @@ def compute_cpu_usage():
         """
     return (psutil.cpu_percent(), psutil.cpu_percent(percpu=True))
 
-def read_packet_from_file(): 
+
+def read_packet_from_file():
     with open('/home/pi/Sender/sender_files/python_files/packet', 'r') as file:
-        return file.read()
+        data = file.read()
+    return data
+
+def get_MAC():  # TODO Move to computations
+    try:
+        with open('/sys/class/net/eth0/address') as file:
+            return file.read()
+    except:
+        return 'ff:ff:ff:ff:ff:ff'
+
+
+def read_defaults():  # TODO make path more relative
+    with open('/home/pi/Sender/sender_files/python_files/packet_config.txt',
+              'r') as conf:
+        fields = [val for val in conf.read().split('\n')
+                  if len(val) > 0 and val[0] != '#']
+    return (fields[:-1], fields[len(fields)-1])

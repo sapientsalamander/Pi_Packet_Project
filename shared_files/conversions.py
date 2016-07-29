@@ -1,5 +1,6 @@
 import struct
 
+
 def convert_packet_int_array(pac):
     """Converts a Scapy packet into an array of integers."""
     tmp = str(pac).encode('hex')
@@ -35,7 +36,7 @@ def convert_packet_delay(pps):
 
 
 def convert_bandwidth_bits_per_second(d_bytes, d_time,
-                                   pac_len=0, sys_err=0):
+                                      pac_len=0, sys_err=0):
     """Calculates the bandwidth, taking in delta bytes and delta time and
     outputting bandwidth in bits per second.
 

@@ -19,31 +19,6 @@ from shared_files import SEASIDE
 from shared_files.SEASIDE import SEASIDE_FLAGS
 
 
-def read_defaults():  # TODO make path more relative
-    with open('/home/pi/Sender/sender_files/python_files/packet_config.txt',
-              'r') as conf:
-        fields = [line for line in conf.read().split('\n')]
-        defaults = []
-        for line in fields:
-            try:
-                if line[0] != '#':
-                    defaults.append(line)
-            except IndexError:  # For blank lines
-                pass
-    return (defaults[:-1], defaults[len(defaults)-1])
-
-
-def configure_delay(lcd, lcd_lock, default):
-    with lcd_lock:
-        delay = lcd.get_input_format('Delay:\n%i%i%i.%i%i%i%i',
-                                     default)
-    delay = float(delay[7:])
-
-    delay_seconds = int(delay)
-    delay_useconds = (delay * 1000000 - delay_seconds * 1000000)
-    return (delay_seconds, delay_useconds)
-
-
 def display_loop():
     """Display the current information on the LCD screen."""
 
@@ -89,8 +64,11 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
     is_sending = False
 
     global packet
-    packet = conversions.convert_packet_int_array(pgen.configure_UDP_packet(lcd, lcd_lock, d_packet_vals))
-    delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock, d_delay)
+    packet = conversions.convert_packet_int_array(
+        # pgen.configure_UDP_packet(lcd, lcd_lock, d_packet_vals))
+        pgen.configure_packet(lcd, lcd_lock))
+    delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
+                                                         d_delay)
     delay_bytes = struct.pack('=BI', delay_seconds, delay_useconds)
     SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value, delay_bytes)
     time.sleep(1)
@@ -99,10 +77,12 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
     while True:
         if lcd.is_pressed(LCD.SELECT):  # Configure packet
             packet = conversions.convert_packet_int_array(
-                                    pgen.configure_UDP_packet(lcd, lcd_lock,
-                                                              d_packet_vals))
-            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock, d_delay)
-            delay_bytes = conversions.delay_to_bytes(delay_seconds, delay_useconds)
+                # pgen.configure_UDP_packet(lcd, lcd_lock, d_packet_vals))
+                pgen.configure_packet(lcd, lcd_lock))
+            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
+                                                                 d_delay)
+            delay_bytes = conversions.delay_to_bytes(delay_seconds,
+                                                     delay_useconds)
 
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
                                  delay_bytes)
@@ -113,14 +93,16 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.START.value)
             is_sending = True
         elif lcd.is_pressed(LCD.RIGHT):  # Reconfigure delay
-            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock, d_delay)
-            delay_bytes = conversions.delay_to_bytes(delay_seconds, delay_useconds)
+            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
+                                                                 d_delay)
+            delay_bytes = conversions.delay_to_bytes(delay_seconds,
+                                                     delay_useconds)
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
                                  delay_bytes)
             threaded_lcd.flash_led(lcd, lcd_lock, *led_state)
         elif lcd.is_pressed(LCD.LEFT):  # Changed to read packet from file
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.PACKET.value,
-            computations.read_packet_from_file())
+                                 computations.read_packet_from_file())
             led_state = (0, 0, 1)
             threaded_lcd.flash_led(lcd, lcd_lock, *led_state)
         elif lcd.is_pressed(LCD.DOWN):  # Stop sending
@@ -139,7 +121,7 @@ def main():
     lcd.set_color(0, 0, 0)
     lcd.clear()
 
-    # An LCD lock to ensure that the configuration and statistics threads do not
+    # An LCD lock to ensure that the configuration and statistics threads don't
     # attempt to write to the LCD at the same time.
     global lcd_lock
     lcd_lock = thread.allocate_lock()
@@ -147,12 +129,13 @@ def main():
     global screen_output
     screen_output = ['', '']
 
-    d_packet_vals, d_delay = read_defaults()
+    d_packet_vals, d_delay = computations.read_defaults()
 
-    global packet 
+    global packet
     packet = (scapy.Ether(dst=d_packet_vals[0]) /
               scapy.IP(dst=d_packet_vals[1]) /
-              scapy.UDP(sport=int(d_packet_vals[2]), dport=int(d_packet_vals[3])))
+              scapy.UDP(sport=int(d_packet_vals[2]),
+                        dport=int(d_packet_vals[3])))
 
     # Lock to only allow one instance of this program to run
     # Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
