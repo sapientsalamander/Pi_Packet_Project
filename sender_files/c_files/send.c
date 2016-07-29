@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <math.h>
+#include <netinet/tcp.h>
 #include <pcap.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -112,9 +113,10 @@ initialize_socket(void)
     if (bind(socket_fd, pointer_sock, size_sock) < 0) {
         fprintf(stderr, "bind() failed.\n");
         sleep(1);
+        fprintf(stderr, "Retrying...\n");
     }
 
-    if (listen(socket_fd, 1) < 0) {
+    if (listen(socket_fd, 8) < 0) {
         fprintf(stderr, "listen() failed.\n");
         return -1;
     }
@@ -141,17 +143,19 @@ initialize_pcap(void)
 
     if (pcap_set_buffer_size(handle, PCAP_BUFFER_SIZE)) {
         fprintf(stderr, "pcap_set_buffer_size() failed to expand buffer.\n");
+        return -1;
     }
 
     if (pcap_activate(handle)) {
         fprintf(stderr, "pcap couldn't intialize handler.\n");
         fprintf(stderr, "pcap error is %s.\n", pcap_geterr(handle));
+        return -1;
     }
 
     return 0;
 }
 
-void
+static void
 send_statistics(void)
 {
     SEASIDE python_seaside;
@@ -168,6 +172,7 @@ send_statistics(void)
     ssize_t ret;
     if ((ret = send(python_fd, buffer, sizeof(buffer), 0)) < 0) {
         fprintf(stderr, "Error with sending to UI socket.\n");
+        return -1;
     }
 }
 
@@ -193,7 +198,7 @@ timespec_add(const struct timespec *t1, const struct timespec *t2)
  * WARNING: Before you change anything the packet, sleep time, etc.
  * be sure to kill this thread, make any changes you want, and then
  * start the thread back up, to ensure that there are no race conditions. */
-void *
+static void *
 send_packets(void *unused)
 {
     if (packet == NULL) {
@@ -272,6 +277,7 @@ static void
 listen_packet_info(void)
 {
     while (1) {
+        printf("receive\n");
         while ((packet_len_temp = 
                recv(python_fd, packet_temp, UI_BUFFER_SIZE, 0)) <= 0);
 
@@ -331,12 +337,15 @@ main(void)
         printf("Error in initialize_pcap().\n");
         return -1;
     }
+
     if (initialize_socket()) {
         printf("Error in initialize_socket().\n");
         return -1;
     }
+
     printf("Successfully initialized everything.\n");
     listen_packet_info();
     close(python_fd);
+    close(socket_fd);
     pcap_close(handle);
 }

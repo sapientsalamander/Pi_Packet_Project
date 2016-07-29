@@ -28,3 +28,7 @@ def compute_cpu_usage():
         per core.
         """
     return (psutil.cpu_percent(), psutil.cpu_percent(percpu=True))
+
+def read_packet_from_file(): 
+    with open('/home/pi/Sender/sender_files/python_files/packet', 'r') as file:
+        return file.read()

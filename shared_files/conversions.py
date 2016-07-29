@@ -1,3 +1,5 @@
+import struct
+
 def convert_packet_int_array(pac):
     """Converts a Scapy packet into an array of integers."""
     tmp = str(pac).encode('hex')
@@ -6,7 +8,7 @@ def convert_packet_int_array(pac):
 
 
 def convert_MAC_addr(address):
-    """Converts a MAC address from form ffffff-ffffff to ff:ff:ff:ff:ff:ff"""
+    """Converts a MAC address from ffffff-ffffff to ff:ff:ff:ff:ff:ff"""
     mac = []
     address = address.replace('-', '')
     for i in xrange(0, len(address), 2):
@@ -15,25 +17,25 @@ def convert_MAC_addr(address):
 
 
 def convert_packet_delay(pps):
-    """Calculates a delay between packets given the desired number of packets
-    per second.
+    """Calculates a delay between packets given the desired number of
+    packets per second.
 
     Args:
         pps - desired number of packets per second
 
     Returns:
-        tuple (int, int): The number of whole seconds and microseconds
+        int: The number of whole seconds and microseconds
         between packets as a tuple.
     """
-    seconds = 0
-    useconds = (1.0 / pps) * 1000000
-    while useconds >= 1000000:
-        useconds -= 1000000
-        seconds += 1
-    return (int(seconds), int(useconds))
+    try:
+        useconds = (1.0 / pps) * 1000000
+    except (ZeroDivisionError):
+        useconds = 0
+    return int(useconds)
 
 
-def convert_bandwidth_bits_per_second(d_bytes, d_time, pac_len=0, sys_err=0):
+def convert_bandwidth_bits_per_second(d_bytes, d_time,
+                                   pac_len=0, sys_err=0):
     """Calculates the bandwidth, taking in delta bytes and delta time and
     outputting bandwidth in bits per second.
 
@@ -62,7 +64,7 @@ def convert_bandwidth_units(bandwidth):
         bandwidth: Current bandwidth in bits per second.
 
     Returns:
-        tuple(float, str): The adjusted number and appropriate unit as a tuple.
+        tuple(float, str): The adjusted number and unit as a tuple.
     """
     BDWTH_ABBRS = ('bps', 'Kbps', 'Mbps', 'Gbps')
 
@@ -71,3 +73,7 @@ def convert_bandwidth_units(bandwidth):
         bandwidth /= 1000.0
         bw_unit += 1
     return (bandwidth, BDWTH_ABBRS[bw_unit])
+
+
+def delay_to_bytes(delay_seconds, delay_useconds):  # TODO move to conversions
+    return struct.pack('=BI', delay_seconds, delay_useconds)
