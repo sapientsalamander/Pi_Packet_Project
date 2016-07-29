@@ -195,24 +195,15 @@ if __name__ == '__main__':
          packet, seconds = configure_packet() # Removed useconds for now. 
          
          misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
-         time.sleep(1) # Allows the C program time to read them individually
+         time.sleep(1) # TODO: Fix needing this sleep function
          misc_functions.send_SEASIDE(c_socket, SEASIDE.PACKET, pkt=packet)
 
       elif lcd.is_pressed(LCD.UP): # Begin sending
-         lcd_lock.acquire()
-         lcd.set_color(0,1,0) # Green for go
-         lcd_lock.release()
-
          misc_functions.send_SEASIDE(c_socket, SEASIDE.START)
-
       elif lcd.is_pressed(LCD.RIGHT): # Reset delay to user's number of seconds
          misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME, sleep_time=seconds)
       elif lcd.is_pressed(LCD.LEFT): # Remove delay
          misc_functions.send_SEASIDE(c_socket, SEASIDE.SLEEP_TIME) 
       elif lcd.is_pressed(LCD.DOWN): # Stop sending
-         lcd_lock.acquire()
-         lcd.set_color(0,0,0) #Turn off LED
-         lcd_lock.release()
-
          misc_functions.send_SEASIDE(c_socket, SEASIDE.STOP)
       time.sleep(0.3)
