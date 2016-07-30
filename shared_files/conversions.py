@@ -76,5 +76,5 @@ def convert_bandwidth_units(bandwidth):
     return (bandwidth, BDWTH_ABBRS[bw_unit])
 
 
-def delay_to_bytes(delay_seconds, delay_useconds):  # TODO move to conversions
+def convert_delay_bytes(delay_seconds, delay_useconds):
     return struct.pack('=BI', delay_seconds, delay_useconds)

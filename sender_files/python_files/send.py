@@ -6,7 +6,7 @@ import sys
 import os
 import socket
 import time
-import thread
+import threading
 import struct
 
 import scapy.all as scapy
@@ -37,12 +37,12 @@ def update_statistics_loop():
     """
 
     time_cur = time.time()
-    tx_cur = computations.compute_interface_bytes('eth0', 'tx')
+    tx_cur = computations.read_interface_bytes('eth0', 'tx')
     while True:
         tx_prev = tx_cur
         time_prev = time_cur
 
-        tx_cur = computations.compute_interface_bytes('eth0', 'tx')
+        tx_cur = computations.read_interface_bytes('eth0', 'tx')
         time_cur = time.time()
 
         d_bytes = tx_cur - tx_prev
@@ -52,7 +52,7 @@ def update_statistics_loop():
 
         bw, bw_unit = conversions.convert_bandwidth_units(bw)
 
-        cpu, percore = computations.compute_cpu_usage()  # percore unused
+        cpu, percore = computations.read_cpu_usage()  # percore unused
 
         screen_output[0] = 'Bw:%2.1f %s' % (bw, bw_unit)
         screen_output[1] = 'CPU:%2.1f%%' % (cpu)
@@ -69,7 +69,8 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
         pgen.configure_packet(lcd, lcd_lock))
     delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
                                                          d_delay)
-    delay_bytes = struct.pack('=BI', delay_seconds, delay_useconds)
+    delay_bytes = conversions.convert_delay_bytes(delay_seconds,
+                                                  delay_useconds)
     SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value, delay_bytes)
     time.sleep(1)
     SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.PACKET.value, packet)
@@ -81,8 +82,8 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
                 pgen.configure_packet(lcd, lcd_lock))
             delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
                                                                  d_delay)
-            delay_bytes = conversions.delay_to_bytes(delay_seconds,
-                                                     delay_useconds)
+            delay_bytes = conversions.convert_delay_bytes(delay_seconds,
+                                                          delay_useconds)
 
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
                                  delay_bytes)
@@ -95,8 +96,8 @@ def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
         elif lcd.is_pressed(LCD.RIGHT):  # Reconfigure delay
             delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
                                                                  d_delay)
-            delay_bytes = conversions.delay_to_bytes(delay_seconds,
-                                                     delay_useconds)
+            delay_bytes = conversions.convert_delay_bytes(delay_seconds,
+                                                          delay_useconds)
             SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
                                  delay_bytes)
             threaded_lcd.flash_led(lcd, lcd_lock, *led_state)
@@ -124,7 +125,7 @@ def main():
     # An LCD lock to ensure that the configuration and statistics threads don't
     # attempt to write to the LCD at the same time.
     global lcd_lock
-    lcd_lock = thread.allocate_lock()
+    lcd_lock = threading.RLock()
 
     global screen_output
     screen_output = ['', '']
@@ -164,8 +165,12 @@ def main():
     print 'Connected to socket'
 
     try:
-        thread.start_new_thread(display_loop, ())
-        thread.start_new_thread(update_statistics_loop, ())
+        display_thread = threading.Thread(target=display_loop,
+                                          name='DisplayThread')
+        statistics_thread = threading.Thread(target=update_statistics_loop,
+                                             name='StatisticsThread')
+        display_thread.start()
+        statistics_thread.start()
     except:
         print 'Error: ', sys.exc_info()[0]
 

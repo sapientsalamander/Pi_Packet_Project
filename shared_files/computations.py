@@ -1,7 +1,7 @@
 import psutil
 
 
-def compute_interface_bytes(interface, io):
+def read_interface_bytes(interface, io):
     """Return the total number of rx_bytes or tx_bytes since startup.
 
     On Linux machines, there is a directory (/sys/class/net/...) that
@@ -19,7 +19,7 @@ def compute_interface_bytes(interface, io):
         return None
 
 
-def compute_cpu_usage():
+def read_cpu_usage():
     """Calculates cpu usage using the psutil library.
 
     Returns:
@@ -35,12 +35,14 @@ def read_packet_from_file():
         data = file.read()
     return data
 
-def get_MAC():  # TODO Move to computations
+
+def read_MAC():
     try:
         with open('/sys/class/net/eth0/address') as file:
             return file.read()
     except:
-        return 'ff:ff:ff:ff:ff:ff'
+        print 'Error, cannot read MAC address'
+        return '00:00:00:00:00:00'
 
 
 def read_defaults():  # TODO make path more relative

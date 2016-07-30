@@ -12,6 +12,10 @@
 #include <time.h>
 #include <unistd.h>
 
+/* WARNING: Before you change anything too big, be sure to read through
+ * all the WARNING comments, as they generally lay out some of the unintended
+ * consequences that could happen if you change something. */
+
 #define MAX(A,B) (A) < (B) ? (B) : (A)
 #define MIN(A,B) (A) < (B) ? (A) : (B)
 
@@ -36,6 +40,7 @@
 #define SEASIDE_STOP            2
 #define SEASIDE_SLEEP_TIME      3
 #define SEASIDE_NUM_PACKETS     4
+#define SEASIDE_SINGLE_PACKET   5
 
 /* Struct to hold the info that we receive from the UI side. The type
  * refers to the type of data that it holds (see above defines), and the size
@@ -43,11 +48,8 @@
 typedef struct {
     uint8_t type;
     uint16_t size;
+    uint8_t *data;
 } __attribute__((packed)) SEASIDE;
-
-/* Variable used in conjunction with SEASIDE. This is used to hold the actual
- * payload of any incoming packets. */
-uint8_t *SEASIDE_data;
 
 /* These next few declarations are for the UI socket that we will be
  * opening, so we can redirect any incoming packets to the UI. */
@@ -194,9 +196,16 @@ timespec_add(const struct timespec *t1, const struct timespec *t2)
     return result;
 }
 
+/* Send a packet through the pcap interface. */
+static int
+send_packet(void)
+{
+    return pcap_inject(handle, packet, packet_len);
+}
+
 /* Sends the packet stored in packet to the socket specified in
- * initialize_pcap, and displays logging information.
- * WARNING: Before you change anything the packet, sleep time, etc.
+ * initialize_pcap, and displays logging information. */
+/* WARNING: Before you change anything the packet, sleep time, etc.
  * be sure to kill this thread, make any changes you want, and then
  * start the thread back up, to ensure that there are no race conditions. */
 static void *
@@ -256,10 +265,10 @@ send_packets(void *unused)
         printf(".");
 
     } while (spam_packets &&
-            (ret = pcap_inject(handle, packet, packet_len)) >= 0);
+            (ret = send_packet()) >= 0);
 
     if (ret < 0) {
-        fprintf(stderr, "Error in pcap_inject(), returned %d\n", ret);
+        fprintf(stderr, "Error in send_packet(), returned %d\n", ret);
         printf("%s\n", pcap_geterr(handle));
     }
 
@@ -301,9 +310,11 @@ listen_packet_info(void *ui_fd_temp)
 
         SEASIDE seaside_header;
 
-        seaside_header.type = packet_temp[0];
-        seaside_header.size = * (uint16_t *) (packet_temp + 1);
-        SEASIDE_data = packet_temp + 3;
+        /* WARNING: If you ever change the layout or order of the SEASIDE
+         * struct, be sure to change this copying bit, too. */
+        memcpy(&seaside_header.type, packet_temp, sizeof(uint8_t));
+        memcpy(&seaside_header.size, (packet_temp + 1), sizeof(uint16_t));
+        seaside_header.data = packet_temp + 3;
 
         printf("Type: [%d], size: [%d]\n",
             seaside_header.type, seaside_header.size);
@@ -324,7 +335,7 @@ listen_packet_info(void *ui_fd_temp)
 
         /* An Ethernet frame was received. Update our packet to reflect it. */
         case SEASIDE_PACKET:
-            memcpy(packet, SEASIDE_data, seaside_header.size);
+            memcpy(packet, seaside_header.data, seaside_header.size);
             packet_len = seaside_header.size;
             break;
 
@@ -340,10 +351,17 @@ listen_packet_info(void *ui_fd_temp)
 
         /* Change the sleep time in between each packet. */
         case SEASIDE_SLEEP_TIME:
-            sleep_time_seconds = SEASIDE_data[0];
-            memcpy(&sleep_time_useconds, SEASIDE_data + 1, 4);
+            /* WARNING: If you ever change the types of sleep_time_seconds or
+             * useconds, be sure to change the sizes here, too. */
+            memcpy(&sleep_time_seconds, seaside_header.data, sizeof(uint8_t));
+            memcpy(&sleep_time_useconds, seaside_header.data + 1, sizeof(int32_t));
             printf("Seconds: [%d], USeconds: [%d]\n",
                 sleep_time_seconds, sleep_time_useconds);
+            break;
+
+        /* Send a single packet. */
+        case SEASIDE_SINGLE_PACKET:
+            send_packet();
             break;
 
         default:
