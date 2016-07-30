@@ -52,7 +52,11 @@ uint8_t *SEASIDE_data;
 /* These next few declarations are for the UI socket that we will be
  * opening, so we can redirect any incoming packets to the UI. */
 static struct sockaddr_un address;
-static int socket_fd, python_fd;
+static int socket_fd;
+
+/* */
+static struct sockaddr *pointer_sock;
+static socklen_t size_sock;
 
 /* A thread dedicated solely to sending packets onto the wire. */
 static pthread_t send_thread;
@@ -83,14 +87,14 @@ static volatile unsigned long long num_packets_sent = 0;
 
 /* How long we should wait in between each sent packet. */
 static uint8_t sleep_time_seconds = 1;
-static uint32_t sleep_time_useconds = 0;
+static int32_t sleep_time_useconds = 0;
 
 /* Initializes the socket that will be used to receive packet info from
  * the UI program. It binds to the file specified as PYTHON_SOCKET,
  * and then listens in for any attempted connections. When it hears one,
  * we assume that it's the UI program, and we continue on our
  * merry way. */
-int
+static int
 initialize_socket(void)
 {
     /*Initialize the type of socket. */
@@ -108,8 +112,8 @@ initialize_socket(void)
 
     /* Attempt to bind to the file, and then waits for the UI program
      * to connect. */
-    socklen_t size_sock = sizeof(struct sockaddr_un);
-    struct sockaddr *pointer_sock = (struct sockaddr *) &address;
+    size_sock = sizeof(struct sockaddr_un);
+    pointer_sock = (struct sockaddr *) &address;
     if (bind(socket_fd, pointer_sock, size_sock) < 0) {
         fprintf(stderr, "bind() failed.\n");
         sleep(1);
@@ -121,17 +125,12 @@ initialize_socket(void)
         return -1;
     }
 
-    if ((python_fd = accept(socket_fd, pointer_sock, &size_sock)) < 0) {
-        fprintf(stderr, "accept() failed.\n");
-        return -1;
-    }
-
     return 0;
 }
 
 /* Opens up an ethernet socket from pcap, to be used when sending packets
  * over the wire. */
-int
+static int
 initialize_pcap(void)
 {
     handle = pcap_create(DEVICE, errbuf);
@@ -155,7 +154,7 @@ initialize_pcap(void)
     return 0;
 }
 
-static void
+/* static int
 send_statistics(void)
 {
     SEASIDE python_seaside;
@@ -174,7 +173,9 @@ send_statistics(void)
         fprintf(stderr, "Error with sending to UI socket.\n");
         return -1;
     }
-}
+
+    return 0;
+} */
 
 /* Helper function to add two timespecs together. */
 static struct timespec
@@ -206,10 +207,16 @@ send_packets(void *unused)
         return unused;
     }
 
+    /* How long to wait in between each check of spam_packets, to see
+     * if we should exit or not. */
+    const long SPAM_CHECK_TIME = 500000;
+
     struct timespec cur_time, end_time, sleep_time;
     long diff;
     ssize_t ret = 0;
 
+    /* Converting the sleep data we got from spam_packets to the
+     * timespec struct, for ease of use. */
     sleep_time.tv_sec = sleep_time_seconds;
     sleep_time.tv_nsec = sleep_time_useconds * 1000;
 
@@ -229,7 +236,17 @@ send_packets(void *unused)
             diff = (end_time.tv_sec - cur_time.tv_sec) * 1000000
                  + (end_time.tv_nsec - cur_time.tv_nsec) / 1000;
 
-            usleep(MAX(MIN(500000, diff), 0));
+            /* Sleep for either SPAM_CHECK_TIME, or the rest of the
+             * sleep time, which ever one is smaller. Then cap it to
+             * 0, just in case diff is < 0. */
+            const long SLEEP_TIME = MAX(MIN(SPAM_CHECK_TIME, diff), 0);
+            if (SLEEP_TIME >= 1000000) {
+                fprintf(stderr, "Something went wrong in the calculation"
+                       " of SLEEP_TIME; it's too big for usleep, and will"
+                       " have the potential of breaking it.");
+            } else {
+                usleep(SLEEP_TIME);
+            }
 
             if (!spam_packets) {
                 break;
@@ -243,6 +260,7 @@ send_packets(void *unused)
 
     if (ret < 0) {
         fprintf(stderr, "Error in pcap_inject(), returned %d\n", ret);
+        printf("%s\n", pcap_geterr(handle));
     }
 
     return unused;
@@ -273,18 +291,18 @@ stop_sending(void)
 /* Listens to the Unix socket for the packet that we should be sending to the
  * receiving Pi. When it gathers all the information for it, such as
  * destination, data, speed, etc. it starts sending the packet. */
-static void
-listen_packet_info(void)
+static void *
+listen_packet_info(void *ui_fd_temp)
 {
+    int ui_fd = *(int *) ui_fd_temp;
     while (1) {
-        printf("receive\n");
         while ((packet_len_temp = 
-               recv(python_fd, packet_temp, UI_BUFFER_SIZE, 0)) <= 0);
+               recv(ui_fd, packet_temp, UI_BUFFER_SIZE, 0)) <= 0);
 
         SEASIDE seaside_header;
 
         seaside_header.type = packet_temp[0];
-        seaside_header.size = packet_temp[1];
+        seaside_header.size = * (uint16_t *) (packet_temp + 1);
         SEASIDE_data = packet_temp + 3;
 
         printf("Type: [%d], size: [%d]\n",
@@ -293,6 +311,14 @@ listen_packet_info(void)
             printf("%i ", packet_temp[i]);
         }
         printf("\n");
+
+        /* A state variable, to remember if we were sending before we
+         * stopped. After we parse the SEASIDE packet, we continue
+         * sending if we were already sending before (or a start
+         * flag was sent). */
+        unsigned int should_continue_sending = spam_packets;
+
+        stop_sending();
 
         switch (seaside_header.type) {
 
@@ -304,12 +330,12 @@ listen_packet_info(void)
 
         /* We should start sending, if not already sending. */
         case SEASIDE_START:
-            start_sending();
+            should_continue_sending = 1;
             break;
 
         /* We should stop sending, if we have not already stopped. */
         case SEASIDE_STOP:
-            stop_sending();
+            should_continue_sending = 0;
             break;
 
         /* Change the sleep time in between each packet. */
@@ -324,8 +350,31 @@ listen_packet_info(void)
             fprintf(stderr, "Invalid SEASIDE flag received.\n");
             break;
         }
+
+        if (should_continue_sending) {
+            start_sending();
+        }
     }
     fprintf(stderr, "Error in listen_packet_info().\n");
+
+    return NULL;
+}
+
+static int
+accept_connections(void)
+{
+    int ui_fd;
+    while (1) {
+        if ((ui_fd = accept(socket_fd, pointer_sock, &size_sock)) < 0) {
+            fprintf(stderr, "accept() failed.\n");
+            return -1;
+        }
+
+        pthread_t ui_thread;
+        pthread_create(&ui_thread, NULL, listen_packet_info, (void *) &ui_fd);
+    }
+
+    return -1;
 }
 
 /* Initializes pcap and the socket, and then sends the packet that was
@@ -344,8 +393,7 @@ main(void)
     }
 
     printf("Successfully initialized everything.\n");
-    listen_packet_info();
-    close(python_fd);
+    accept_connections();
     close(socket_fd);
     pcap_close(handle);
 }
