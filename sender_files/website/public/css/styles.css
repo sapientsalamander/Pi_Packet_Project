@@ -1,0 +1,52 @@
+body {
+    /* For the navbar.*/
+    padding-top: 50px;
+}
+
+#wrapper {
+    padding-left: 0;
+    -webkit-transition: all 0.5s ease;
+    -moz-transition: all 0.5s ease;
+    -o-transition: all 0.5s ease;
+    transition: all 0.5s ease;
+    overflow: visible;
+}
+
+#wrapper.toggled {
+    padding-left: 250px;
+    overflow: scroll;
+}
+
+#wrapper.toggled #sidebar-wrapper {
+    width: 250px;
+}
+
+#page-content-wrapper {
+    position: absolute;
+    padding: 15px;
+    width: 100%;
+    overflow-x: visible;
+}
+
+#menu {
+    margin-top: 10px;
+}
+
+.xyz {
+    min-width: 360px;
+    overflow: visible;
+}
+
+#wrapper.toggled #page-content-wrapper {
+    position: relative;
+    margin-right: 0px;
+}
+
+.fixed-brand {
+    width: auto;
+}
+
+.input-group {
+    margin-bottom: 20px;
+    margin-right: 20px;
+}

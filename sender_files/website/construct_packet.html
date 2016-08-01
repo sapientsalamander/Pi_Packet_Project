@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <title>Construct Packet</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/styles.css" rel="stylesheet">
+    <link href="css/navbar.css" rel="stylesheet">
+    <link href="css/font-awesome.min.css" rel="stylesheet">
+</head>
+
+<body>
+
+    <div id="navbar-wrapper"></div>
+
+    <div id="wrapper">
+
+        <div id="sidebar-wrapper"></div>
+
+        <div id="page-content-wrapper">
+            <div class="container-fluid xyz">
+                <h1>Create a Packet</h1>
+                <br>
+                <div class="row">
+                    <div class="col-xs-3 col-sm-3 col-md-2 col-lg-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Add Layer <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                <li class="dropdown-header">Miscellaneous</li>
+                                <li class="packet-layer-select"><a href="#">Raw</a></li>
+                                <li class="packet-layer-select"><a href="#">Test</a></li>
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Layer 4</li>
+                                <li class="packet-layer-select"><a href="#">UDP</a></li>
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Layer 3</li>
+                                <li class="packet-layer-select"><a href="#">IP</a></li>
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Layer 2</li>
+                                <li class="packet-layer-select"><a href="#">Ether</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-xs-3 col-sm-3 col-md-3 col-lg-2">
+                        <div id="selected-layers" class="btn-group-vertical" role="group" aria-label="layers_selected">
+                            <button type="button" class="btn btn-default">2</button>
+                        </div>
+                    </div>
+                    <div class="col-xs-6 col-sm-6 col-md-7 col-lg-8">
+                        <form class="form-inline" id="field-inputs">
+                            <div class="input-group">
+                                <span class="input-group-addon">src:</span>
+                                <input type="text" class="form-control">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/jquery-3.1.0.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/load_navbars.js"></script>
+    <script src="js/construct_packet.js"></script>
+
+</body>
+
+</html>
