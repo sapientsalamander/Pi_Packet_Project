@@ -1,7 +1,7 @@
 $(document).ready(function () {
     'use strict';
-    $('#navbar-wrapper').load('./common/navbar.html?time=' + new Date().getTime(), function () {
-        $('#sidebar-wrapper').load('common/sidebar.html', function () {
+    $('#navbar-wrapper').load('/static/common/navbar.html', function () {
+        $('#sidebar-wrapper').load('/static/common/sidebar.html', function () {
             $('#menu ul').hide();
             $('#menu ul').children('.current').parent().show();
             //$('#menu ul:first').show();

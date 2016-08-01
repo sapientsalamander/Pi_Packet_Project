@@ -21,6 +21,10 @@ class PacketServer(object):
     @cherrypy.expose
     def index(self):
         return open('index.html')
+
+    @cherrypy.expose
+    def construct_packet(self):
+        return open('construct_packet.html')
  
 
     @cherrypy.expose

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 
 <head>
@@ -8,10 +8,10 @@
     <meta name="description" content="">
     <meta name="author" content="">
     <title>Construct Packet</title>
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/styles.css" rel="stylesheet">
-    <link href="css/navbar.css" rel="stylesheet">
-    <link href="css/font-awesome.min.css" rel="stylesheet">
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <link href="/static/css/navbar.css" rel="stylesheet">
+    <link href="/static/css/font-awesome.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -24,10 +24,25 @@
 
         <div id="page-content-wrapper">
             <div class="container-fluid xyz">
-                <h1>Create a Packet</h1>
+                <div class="row-fluid">
+                    <h1>Create a Packet
+                        <a class="btn btn-info pull-right" data-toggle="collapse" href="#help_expand" aria-expanded="false" aria-controls="help_expand">Help, por favor.</a>
+                    </h1>
+                    <br>
+                    <div class="collapse" id="help_expand">
+                        <div class="card card-block">Hello! Welcome to the packet configuration page, where you'll be able to craft the packet of your dreams. First things, first:
+                            <ul>
+                                <li>You gotta start selecting which layers you want in this packet. Just click the add layer button, and select which layer you want.</li>
+                                <li>Next, you gotta configure what's inside each layer. Click the layer you want to edit, and a bunch of fields will pop up.</li>
+                                <li>And then you just fill out those fields, and click the dandy 'Done' button!</li>
+                            </ul>
+                            "But wait," I hear you say, "doesn't an Ethernet frame have a checksum / IP packet have a type field / UDP have a length field / etc." YES! However, we here at PPP believe that we are in the future. So we'll fill those out automatically for you.
+                        </div>
+                    </div>
+                </div>
                 <br>
-                <div class="row">
-                    <div class="col-xs-3 col-sm-3 col-md-2 col-lg-2">
+                <div class="row card card-block">
+                    <div class="col-xs-2 col-sm-2 col-md-1 col-lg-1">
                         <div class="btn-group">
                             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Add Layer <span class="caret"></span></button>
                             <ul class="dropdown-menu">
@@ -46,28 +61,38 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="col-xs-3 col-sm-3 col-md-3 col-lg-2">
+                    <div class="col-xs-5 col-sm-5 col-md-4 col-lg-3 text-center">
                         <div id="selected-layers" class="btn-group-vertical" role="group" aria-label="layers_selected">
-                            <button type="button" class="btn btn-default">2</button>
+                            <button class="btn btn-default packet-layer-selected"></button>
                         </div>
+                        <div id="layer-controls" class="btn-group-vertical">
+                            <button id="up-button" class="btn btn-default"><i class="fa fa-arrow-up"></i></button>
+                            <button id="delete-button" class="btn btn-default"><i class="fa fa-times"></i></button>
+                            <button id="down-button" class="btn btn-default"><i class="fa fa-arrow-down"></i></button>
                     </div>
-                    <div class="col-xs-6 col-sm-6 col-md-7 col-lg-8">
+                    </div>
+                    <div class="col-xs-5 col-sm-5 col-md-7 col-lg-8">
                         <form class="form-inline" id="field-inputs">
-                            <div class="input-group">
-                                <span class="input-group-addon">src:</span>
-                                <input type="text" class="form-control">
-                            </div>
                         </form>
+                    </div>
+                </div>
+                <br>
+                <br>
+                <br>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                        <button id="done-configuration" class="btn btn-primary pull-right">Done Configuring Packet</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/jquery-3.1.0.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-    <script src="js/load_navbars.js"></script>
-    <script src="js/construct_packet.js"></script>
+    <script src="/static/js/jquery-3.1.0.min.js"></script>
+    <script src="/static/js/bootstrap.min.js"></script>
+    <script src="/static/js/cookie_wrapper.js"></script>
+    <script src="/static/js/load_navbars.js"></script>
+    <script src="/static/js/construct_packet.js"></script>
 
 </body>
 
