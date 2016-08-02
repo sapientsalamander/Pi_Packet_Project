@@ -58,7 +58,7 @@ $(document).ready(function () {
         layers.forEach(function (layer) {
             var temp = $("<button/>", {
                 class: "btn btn-default packet-layer-selected",
-                html: layer["type"],
+                html: layer["layer_type"],
                 id: layer["id"],
             });
             $("#selected-layers").prepend(temp);
@@ -89,7 +89,7 @@ $(document).ready(function () {
     $(".packet-layer-select").click(function () {
         var layer = $(this).children("a").text();
         var temp_dict = {};
-        temp_dict["type"] = layer;
+        temp_dict["layer_type"] = layer;
         temp_dict["id"] = getID();
         layer_fields[layer].forEach(function (field) {
             temp_dict[field] = "";
@@ -127,10 +127,16 @@ $(document).ready(function () {
     $("#done-configuration").click(function() {
         var req = "";
         console.log(JSON.stringify(layers));
-        
+        /* More efficient deep copy. */
+        var layers_temp = JSON.parse(JSON.stringify(layers));
+
+        layers_temp.forEach(function (entry) {
+            delete entry["id"];
+        });
+
         $.ajax({
             type: "POST",
-            url: "packet_config?packet=" + JSON.stringify(layers),
+            url: "packet_config?packet_layers=" + JSON.stringify(layers_temp),
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function (data) {

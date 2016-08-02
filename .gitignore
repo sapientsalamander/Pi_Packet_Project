@@ -20,3 +20,6 @@
 
 # GNU Data File
 *.gcno
+
+# Log files
+*.log

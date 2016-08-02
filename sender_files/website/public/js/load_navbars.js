@@ -2,6 +2,20 @@ $(document).ready(function () {
     'use strict';
     $('#navbar-wrapper').load('/static/common/navbar.html', function () {
         $('#sidebar-wrapper').load('/static/common/sidebar.html', function () {
+            
+            function toggle_sidebar() {
+                $("#wrapper").toggleClass("toggled-2");
+                if ($("#wrapper").hasClass("toggled-2")) {
+                    Cookies.set("sidebar", "collapsed");
+                    $("#menu li ul").css("padding-left", 0);
+                } else {
+                    Cookies.set("sidebar", "expanded");
+                    $("#menu li ul").css("padding-left", 40);
+                }
+                //Collapse pills when sidebar changes
+                //$('#menu ul').hide();
+            }
+            
             $('#menu ul').hide();
             $('#menu ul').children('.current').parent().show();
             //$('#menu ul:first').show();
@@ -12,14 +26,7 @@ $(document).ready(function () {
             });
             $("#menu-toggle-2").click(function (e) {
                 e.preventDefault();
-                $("#wrapper").toggleClass("toggled-2");
-                if ($("#wrapper").hasClass("toggled-2")) {
-                    $("#menu li ul").css("padding-left", 0);
-                } else {
-                    $("#menu li ul").css("padding-left", 40);
-                }
-                //Collapse pills when sidebar changes
-                //$('#menu ul').hide();
+                toggle_sidebar();
             });
             //menu li nav-pills
             $('#menu li a').click(function () {
@@ -38,7 +45,9 @@ $(document).ready(function () {
                     }
                 }
             });
-
+            if (Cookies.get("sidebar") === "collapsed") {
+                toggle_sidebar();
+            }
         });
     });
 });

@@ -3,6 +3,14 @@ body {
     padding-top: 50px;
 }
 
+.smooth-transition {
+    -webkit-transition: all 0.5s ease;
+    -moz-transition: all 0.5s ease;
+    -o-transition: all 0.5s ease;
+    -ms-transition: all 0.5s ease;
+    transition: all 0.5s ease;
+}
+
 #sidebar-wrapper {
     overflow-x: hidden;
     z-index: 1000;
@@ -16,6 +24,7 @@ body {
     -webkit-transition: all 0.5s ease;
     -moz-transition: all 0.5s ease;
     -o-transition: all 0.5s ease;
+    -ms-transition: all 0.5s ease;
     transition: all 0.5s ease;
 }
 
