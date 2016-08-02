@@ -33,6 +33,22 @@ SOCKET_ADDR = '/tmp/receive_socket'
 # one for bandwidth measuring, do not interfere when updating the LCD.
 lcd_lock = thread.allocate_lock()
 
+packet = scapy.Ether()
+
+def display_LED(bandwidth, bw_unit):
+   color = (0,0,0)
+   if bw_unit == 'bps' and bandwidth == 0:
+      color = (0, 0, 0)
+   elif bw_unit == 'bps':
+      color = (0, 1, 0)
+   elif bw_unit == 'Kbps':
+      color = (0, 0, 1)
+   elif bw_unit == 'Mbps':
+      color = (1, 0, 0)
+
+   with lcd_lock:
+      lcd.set_color(*color)
+
 def display_loop():
    """Pull in screen_output and update screen based on which one should
    be currently up.
@@ -91,36 +107,41 @@ def update_statistics_loop():
    """Calculate the bandwidth and cpu usage (can be expanded to include
    more info) and displays it on the LCD.
    """
-   rx_prev = shared_functions.get_rx_tx_bytes('rx')
-   time_prev = time.time()
+   rx_cur = shared_functions.get_rx_tx_bytes('rx')
+   time_cur = time.time()
 
-   while True:
+   while True: 
+      rx_prev = rx_cur
+      time_prev = time_cur
+      
+      rx_cur = shared_functions.get_rx_tx_bytes('rx')
+      # TODO: Find actual received frame size
+      time_cur = time.time()
+
       screen_output[Screens.CPU][0] = 'CPU Usage: %4.1f%%' % \
                                       (psutil.cpu_percent())
       cores = psutil.cpu_percent(percpu=True)
       screen_output[Screens.CPU][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
                                       tuple(cores)
 
-      rx_cur = shared_functions.get_rx_tx_bytes('rx')
-      time_cur = time.time()
+      d_bytes = rx_cur - rx_prev
+      try:
+         num_packets = d_bytes / (len(packet) - 14)
+      except (ZeroDivisionError):
+         print 'Zero'
+         num_packets = 0
 
       # Bandwidth (bits/s) = (delta bytes / delta time) * 8 bits / byte.
-      bandwidth = (rx_cur - rx_prev)/(time_cur - time_prev) * 8
+      bandwidth = (num_packets * len(packet))/(time_cur - time_prev) * 8
       bandwidth, bw_unit = shared_functions.calculate_bandwidth(bandwidth)
 
-      lcd_lock.acquire()
-
-      shared_functions.display_LED(bandwidth, bw_unit)
-
-      lcd_lock.release()
+      display_LED(bandwidth, bw_unit)
 
       # Ex. Bw: 30.5 Kbps.
       message = 'Bw:%5.1f %s' % (bandwidth, bw_unit)
 
       screen_output[Screens.Summary][1] = message
 
-      rx_prev = rx_cur
-      time_prev = time_cur
 
       time.sleep(1)
 
@@ -129,6 +150,7 @@ def listen_packets_loop():
    for any incoming packets. When we hear one, parse it with scapy and update
    the display to show information about packet.
    """
+   global packet
    # If file descriptor already exists from previous session, we delete it.
    try:
       os.unlink(SOCKET_ADDR)

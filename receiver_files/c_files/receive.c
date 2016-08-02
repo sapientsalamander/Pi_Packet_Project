@@ -16,7 +16,7 @@
 
 /* Filter for any incoming packets, callback is only called on packets
  * that pass it. */
-#define PCAP_FILTER "port 666"
+#define PCAP_FILTER "port 4321"
 
 /* These next few declarations are for the Python socket that we will be
  * opening, so we can redirect any incoming packets to the Python UI. */
