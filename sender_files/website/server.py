@@ -4,6 +4,7 @@ import socket
 import string
 import struct
 import sys
+import threading
 
 import cherrypy
 from scapy.all import *
@@ -12,6 +13,7 @@ from shared_files import SEASIDE
 from shared_files import conversions
 
 c_socket = None
+c_socket_lock = threading.Lock()
 
 def str_to_class(string):
     return reduce(getattr, string.split("."), sys.modules[__name__])
@@ -28,6 +30,10 @@ class PacketServer(object):
     @cherrypy.expose
     def configure_speed(self):
         return open('configure_speed.html')
+
+    @cherrypy.expose
+    def send(self):
+        return open('send.html')
  
 
     @cherrypy.expose
@@ -48,21 +54,22 @@ class PacketServer(object):
 
         packet.show()
         packet = conversions.convert_packet_int_array(packet)
-        SEASIDE.send_SEASIDE(c_socket, 0, packet)
+        SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
             
 
     @cherrypy.expose
     def command(self, command, data=None):
         if data is None:
             data = []
-        SEASIDE.send_SEASIDE(c_socket, int(command), eval(data))
+        SEASIDE.send_SEASIDE(c_socket, c_socket_lock, int(command), eval(data))
 
     @cherrypy.expose
-    def command_and_respond(self, command, data=None):
-        if data is None:
-            data = []
-        SEASIDE.send_SEASIDE(c_socket, int(command), eval(data))
-        return c_socket.recv(2048)
+    def command_and_respond(self, command, size):
+        SEASIDE.request_SEASIDE(c_socket, c_socket_lock, int(command))
+        temp = c_socket.recv(2048)
+        print temp, ' ', len(temp), ' ', repr(temp)
+        temp = struct.unpack('=' + size, repr(temp))[0]
+        return struct.pack('!' + size, temp)
 
 if __name__ == '__main__':
     os.chdir('sender_files/website/')

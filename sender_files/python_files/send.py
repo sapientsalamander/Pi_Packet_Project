@@ -3,7 +3,6 @@
 import fcntl
 import sys
 
-import os
 import socket
 import time
 import threading
@@ -29,7 +28,7 @@ def display_loop():
         time.sleep(0.7)
 
 
-def update_statistics_loop():
+def update_statistics_loop(c_socket, c_socket_lock):
     """Update the values of bandwidth and CPU use.
 
     Calculates bandwidth using change in bytes received over time.
@@ -37,19 +36,21 @@ def update_statistics_loop():
     """
 
     time_cur = time.time()
-    tx_cur = computations.read_interface_bytes('eth0', 'tx')
     while True:
-        tx_prev = tx_cur
         time_prev = time_cur
 
-        tx_cur = computations.read_interface_bytes('eth0', 'tx')
         time_cur = time.time()
 
-        d_bytes = tx_cur - tx_prev
+        # TODO: Update flags, remove hardcoded 8
+        d_bytes = SEASIDE.request_SEASIDE(c_socket, c_socket_lock, 8)
+        print 'BYTES: ', repr(d_bytes)
+
+        d_bytes = struct.unpack('=I', d_bytes)
+        d_bytes = d_bytes[0]
+
         d_time = time_cur - time_prev
         bw = conversions.convert_bandwidth_bits_per_second(d_bytes, d_time,
                                                            len(packet), 8)
-
         bw, bw_unit = conversions.convert_bandwidth_units(bw)
 
         cpu, percore = computations.read_cpu_usage()  # percore unused
@@ -59,56 +60,56 @@ def update_statistics_loop():
         time.sleep(1)
 
 
-def user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay):
+def user_interaction(lcd, lcd_lock, c_socket, c_socket_lock):
     led_state = (0, 1, 0)
     is_sending = False
 
     global packet
     packet = conversions.convert_packet_int_array(
-        # pgen.configure_UDP_packet(lcd, lcd_lock, d_packet_vals))
         pgen.configure_packet(lcd, lcd_lock))
-    delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
-                                                         d_delay)
+    delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock)
     delay_bytes = conversions.convert_delay_bytes(delay_seconds,
                                                   delay_useconds)
-    SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value, delay_bytes)
+    SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                         SEASIDE_FLAGS.DELAY.value, delay_bytes)
     time.sleep(1)
-    SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.PACKET.value, packet)
+    SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                         SEASIDE_FLAGS.PACKET.value, packet)
 
     while True:
         if lcd.is_pressed(LCD.SELECT):  # Configure packet
-            packet = conversions.convert_packet_int_array(
-                # pgen.configure_UDP_packet(lcd, lcd_lock, d_packet_vals))
-                pgen.configure_packet(lcd, lcd_lock))
-            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
-                                                                 d_delay)
-            delay_bytes = conversions.convert_delay_bytes(delay_seconds,
-                                                          delay_useconds)
+            packet_temp = pgen.configure_packet(lcd, lcd_lock)
+            if packet_temp is None:
+                time.sleep(0.3)
+                continue
+            packet = conversions.convert_packet_int_array(packet_temp)
 
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
-                                 delay_bytes)
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.DELAY.value, delay_bytes)
             time.sleep(1)  # TODO: Fix needing this sleep function
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.PACKET.value, packet)
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.PACKET.value, packet)
             led_state = (0, 1, 0)
         elif lcd.is_pressed(LCD.UP):  # Begin sending
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.START.value)
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.START.value)
             is_sending = True
-        elif lcd.is_pressed(LCD.RIGHT):  # Reconfigure delay
-            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock,
-                                                                 d_delay)
+        elif lcd.is_pressed(LCD.RIGHT):  # Configure delay
+            delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock)
             delay_bytes = conversions.convert_delay_bytes(delay_seconds,
                                                           delay_useconds)
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.DELAY.value,
-                                 delay_bytes)
-            threaded_lcd.flash_led(lcd, lcd_lock, *led_state)
-        elif lcd.is_pressed(LCD.LEFT):  # Changed to read packet from file
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.PACKET.value,
-                                 computations.read_packet_from_file())
-            led_state = (0, 0, 1)
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.DELAY.value, delay_bytes)
+            threaded_lcd.flash_led(lcd, lcd_lock, 0, 0, 1)
+        elif lcd.is_pressed(LCD.LEFT):  # Send single packet
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.SINGLE_PACKET.value)
             threaded_lcd.flash_led(lcd, lcd_lock, *led_state)
         elif lcd.is_pressed(LCD.DOWN):  # Stop sending
-            SEASIDE.send_SEASIDE(c_socket, SEASIDE_FLAGS.STOP.value)
+            SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
+                                 SEASIDE_FLAGS.STOP.value)
             is_sending = False
+
         if is_sending:
             threaded_lcd.lock_and_set_led_color(lcd, lcd_lock, *led_state)
         else:
@@ -127,16 +128,20 @@ def main():
     global lcd_lock
     lcd_lock = threading.RLock()
 
+    # A lock to ensure that only one thread may use the c_socket to communicate
+    # using SEASIDE at once.
+    global c_socket_lock
+    c_socket_lock = threading.RLock()
+
     global screen_output
     screen_output = ['', '']
 
-    d_packet_vals, d_delay = computations.read_defaults()
-
     global packet
-    packet = (scapy.Ether(dst=d_packet_vals[0]) /
-              scapy.IP(dst=d_packet_vals[1]) /
-              scapy.UDP(sport=int(d_packet_vals[2]),
-                        dport=int(d_packet_vals[3])))
+    defaults = computations.read_defaults()
+    packet = (scapy.Ether(dst=defaults['dst_MAC']) /
+              scapy.IP(dst=defaults['dst_IP']) /
+              scapy.UDP(sport=int(defaults['UDP_srcport']),
+                        dport=int(defaults['UDP_dstport'])))
 
     # Lock to only allow one instance of this program to run
     # Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
@@ -168,13 +173,16 @@ def main():
         display_thread = threading.Thread(target=display_loop,
                                           name='DisplayThread')
         statistics_thread = threading.Thread(target=update_statistics_loop,
-                                             name='StatisticsThread')
+                                             name='StatisticsThread',
+                                             args=(c_socket, c_socket_lock))
+        display_thread.daemon = True
+        statistics_thread.daemon = True
         display_thread.start()
         statistics_thread.start()
     except:
         print 'Error: ', sys.exc_info()[0]
 
-    user_interaction(lcd, lcd_lock, c_socket, d_packet_vals, d_delay)
+    user_interaction(lcd, lcd_lock, c_socket, c_socket_lock)
 
 
 if __name__ == '__main__':

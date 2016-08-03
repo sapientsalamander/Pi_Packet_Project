@@ -89,10 +89,14 @@ $(document).ready(function () {
 
     $.ajax({
         type: "POST",
-        url: "command_and_respond?command=8;data=None",
-        contentType: "application/json; charset=utf-8",
+        url: "command_and_respond?command=8;size=I;",
+        contentType: "text/plain;charset=utf-8",
+        contentType: false,
         success: function (data) {
-            packet_size = byte_array_to_long(string_to_byte_array(data));
+            console.log("HELLO WORLD");
+            console.log(data);
+            packet_size = parseInt(data);
+            console.log(data);
             update_max();
             update_bar();    
             if (packet_size == 0) {

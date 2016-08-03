@@ -41,6 +41,9 @@
 #define SEASIDE_SLEEP_TIME      3
 #define SEASIDE_NUM_PACKETS     4
 #define SEASIDE_SINGLE_PACKET   5
+#define SEASIDE_GET_PACKET      6
+#define SEASIDE_GET_BANDWIDTH   7
+#define SEASIDE_GET_PACKET_SIZE 8
 
 /* Struct to hold the info that we receive from the UI side. The type
  * refers to the type of data that it holds (see above defines), and the size
@@ -68,15 +71,18 @@ static pthread_t send_thread;
 static char errbuf[PCAP_ERRBUF_SIZE];
 static pcap_t *handle;
 
-/* packet and packet length, to send to the receiving Pi. Both need _temp
- * variables because while we are sending, we are also listening in for new
- * packets to send, and we need to store these new packets without corrupting
- * a send, so we store them in temporary variables while the sending function
- * finishes up, and then we sync them. */
+/* packet and packet length, to send to the receiving Pi. */
 static uint8_t packet[UI_BUFFER_SIZE];
-static uint8_t packet_temp[UI_BUFFER_SIZE];
-size_t packet_len;
-ssize_t packet_len_temp;
+static size_t packet_len = 0;
+
+/* Mutex to ensure no two threads attempt to modify packet or packet_len
+ * at the same time. */
+static pthread_mutex_t packet_mutex;
+
+/* Variable to hold the bandwidth calculation (bits/s), and a mutex to
+ * ensure that it's not read and written to at the same time. */
+static unsigned long long bandwidth = 0;
+static pthread_mutex_t bandwidth_mutex;
 
 /* Boolean to share between threads. As long as send is true, the sending
  * thread will spam the receiving Pi with as many packets as it can send.
@@ -156,29 +162,6 @@ initialize_pcap(void)
     return 0;
 }
 
-/* static int
-send_statistics(void)
-{
-    SEASIDE python_seaside;
-
-    python_seaside.type = SEASIDE_NUM_PACKETS;
-    python_seaside.size = sizeof(num_packets_sent);
-
-    char buffer[sizeof(SEASIDE) + python_seaside.size];
-
-    memcpy(buffer, &python_seaside, sizeof(SEASIDE));
-    unsigned long long num_temp = num_packets_sent;
-    memcpy(buffer + sizeof(SEASIDE), &num_temp, sizeof(num_temp));
-
-    ssize_t ret;
-    if ((ret = send(python_fd, buffer, sizeof(buffer), 0)) < 0) {
-        fprintf(stderr, "Error with sending to UI socket.\n");
-        return -1;
-    }
-
-    return 0;
-} */
-
 /* Helper function to add two timespecs together. */
 static struct timespec
 timespec_add(const struct timespec *t1, const struct timespec *t2)
@@ -192,6 +175,25 @@ timespec_add(const struct timespec *t1, const struct timespec *t2)
         result.tv_nsec -= NANOSECONDS_PER_SECOND;
         result.tv_sec++;
     }
+
+    return result;
+}
+
+/* Helper function to subtract two timespecs together. */
+static struct timespec
+timespec_sub(const struct timespec *t1, const struct timespec *t2)
+{
+    struct timespec result = *t1;
+
+    /* TODO: While portable for a long, t1->nsec might overflow if
+     * a weird datatype. */
+    if (t1->tv_nsec < t2->tv_nsec) {
+        result.tv_sec--;
+        result.tv_nsec += NANOSECONDS_PER_SECOND;
+    }
+
+    result.tv_sec -= t2->tv_sec;
+    result.tv_nsec -= t2->tv_nsec;
 
     return result;
 }
@@ -220,7 +222,7 @@ send_packets(void *unused)
      * if we should exit or not. */
     const long SPAM_CHECK_TIME = 500000;
 
-    struct timespec cur_time, end_time, sleep_time;
+    struct timespec cur_time, beg_time, end_time, elapsed_time, sleep_time;
     long diff;
     ssize_t ret = 0;
 
@@ -233,6 +235,7 @@ send_packets(void *unused)
     end_time = cur_time;
 
     do {
+        clock_gettime(CLOCK_MONOTONIC, &beg_time);
         end_time = timespec_add(&end_time, &sleep_time);
 
         /* Basically a non-blocking sleep. We could just sleep the entire
@@ -253,9 +256,12 @@ send_packets(void *unused)
                 fprintf(stderr, "Something went wrong in the calculation"
                        " of SLEEP_TIME; it's too big for usleep, and will"
                        " have the potential of breaking it.");
-            } else {
-                usleep(SLEEP_TIME);
             }
+
+            /* Forget the whole conversion error, SLEEP_TIME is capped
+             * to 0 a few lines up. Plus, SLEEP_TIME is guaranteed to be big
+             * enough to hold the values of useconds_t. */
+            usleep(SLEEP_TIME);
 
             if (!spam_packets) {
                 break;
@@ -264,8 +270,23 @@ send_packets(void *unused)
 
         printf(".");
 
+        /* Bandwidth calculation in bits per second. */
+        clock_gettime(CLOCK_MONOTONIC, &cur_time);
+        elapsed_time = timespec_sub(&cur_time, &beg_time);
+        double d_time = elapsed_time.tv_sec
+                        + (((double) elapsed_time.tv_nsec)
+                           / NANOSECONDS_PER_SECOND);
+        pthread_mutex_lock(&bandwidth_mutex);
+        bandwidth = (packet_len * 8.0) / d_time;
+        pthread_mutex_unlock(&bandwidth_mutex);
+        printf("%f\n", d_time);
+        printf("%lld\n", bandwidth);
     } while (spam_packets &&
             (ret = send_packet()) >= 0);
+
+    pthread_mutex_lock(&bandwidth_mutex);
+    bandwidth = 0;
+    pthread_mutex_unlock(&bandwidth_mutex);
 
     if (ret < 0) {
         fprintf(stderr, "Error in send_packet(), returned %d\n", ret);
@@ -303,6 +324,11 @@ stop_sending(void)
 static void *
 listen_packet_info(void *ui_fd_temp)
 {
+    /* Temporary variables to store any received data, before moving it
+     * to the global scope. */
+    static uint8_t packet_temp[UI_BUFFER_SIZE];
+    ssize_t packet_len_temp;
+
     int ui_fd = *(int *) ui_fd_temp;
     while (1) {
         while ((packet_len_temp = 
@@ -323,13 +349,26 @@ listen_packet_info(void *ui_fd_temp)
         }
         printf("\n");
 
+        pthread_mutex_lock(&packet_mutex);
+
         /* A state variable, to remember if we were sending before we
          * stopped. After we parse the SEASIDE packet, we continue
          * sending if we were already sending before (or a start
          * flag was sent). */
         unsigned int should_continue_sending = spam_packets;
 
-        stop_sending();
+        switch (seaside_header.type) {
+        case SEASIDE_PACKET:
+        case SEASIDE_START:
+        case SEASIDE_STOP:
+        case SEASIDE_SLEEP_TIME:
+        case SEASIDE_SINGLE_PACKET:
+            stop_sending();
+        break;
+
+        default:
+            break;
+        }
 
         switch (seaside_header.type) {
 
@@ -359,9 +398,37 @@ listen_packet_info(void *ui_fd_temp)
                 sleep_time_seconds, sleep_time_useconds);
             break;
 
+        /* Return the number of received packets. */
+        case SEASIDE_NUM_PACKETS:
+            /* TODO: Implement. */
+            break;
+
         /* Send a single packet. */
         case SEASIDE_SINGLE_PACKET:
             send_packet();
+            break;
+
+        /* Return the current packet. */
+        case SEASIDE_GET_PACKET:
+            if (send(ui_fd, packet, packet_len, 0) < 0) {
+                fprintf(stderr, "Error with send to ui_fd\n");
+            }
+            break;
+
+        /* Return the bandwidth calculated. */
+        case SEASIDE_GET_BANDWIDTH:
+            pthread_mutex_lock(&bandwidth_mutex);
+            if (send(ui_fd, &bandwidth, sizeof(bandwidth), 0) < 0) {
+                fprintf(stderr, "Error with send to ui_fd\n");
+            }
+            pthread_mutex_unlock(&bandwidth_mutex);
+            break;
+
+        /* Return the size of the current packet. */
+        case SEASIDE_GET_PACKET_SIZE:
+            if (send(ui_fd, &packet_len, sizeof(packet_len), 0) < 0) {
+                fprintf(stderr, "Error with send to ui_fd\n");
+            }
             break;
 
         default:
@@ -369,9 +436,22 @@ listen_packet_info(void *ui_fd_temp)
             break;
         }
 
-        if (should_continue_sending) {
-            start_sending();
+        switch (seaside_header.type) {
+        case SEASIDE_PACKET:
+        case SEASIDE_START:
+        case SEASIDE_STOP:
+        case SEASIDE_SLEEP_TIME:
+        case SEASIDE_SINGLE_PACKET:
+            if (should_continue_sending) {
+                start_sending();
+            }
+        break;
+
+        default:
+            break;
         }
+
+        pthread_mutex_unlock(&packet_mutex);
     }
     fprintf(stderr, "Error in listen_packet_info().\n");
 
