@@ -65,7 +65,7 @@ def get_interface_bytes(interface, io):
    except (IOError):
       return None
 
-def calculate_bandwidth_unit(bandwidth):
+def calculate_bandwidth(bandwidth):
    """Calculate the most appropriate unit for a given number of bps.
 
    Chooses the largest applicable unit between bits, kilobits and megabits.
