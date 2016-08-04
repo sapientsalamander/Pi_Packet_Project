@@ -148,4 +148,27 @@ $(document).ready(function () {
         });
     });
 
+    $("#save-file").click(function () {
+        var layers_temp = JSON.parse(JSON.stringify(layers));
+
+        layers_temp.forEach(function (entry) {
+            delete entry["id"];
+        });
+
+        var filename = $("#filename").val();
+
+         $.ajax({
+            type: "POST",
+            url: "save_packet_to_file?pcap_filename=" + filename + "&packet_layers=" + JSON.stringify(layers_temp),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                alert(data);
+            },
+            failure: function (errMsg) {
+                alert(errMsg);
+            }
+        });
+    });
+
 });

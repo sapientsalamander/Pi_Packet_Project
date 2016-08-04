@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <title>Packet Generator</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <link href="/static/css/navbar.css" rel="stylesheet">
+    <link href="/static/css/font-awesome.min.css" rel="stylesheet">
+</head>
+
+<body>
+
+    <div id="navbar-wrapper"></div>
+
+    <div id="wrapper">
+
+        <div id="sidebar-wrapper"></div>
+
+        <div id="page-content-wrapper">
+            <div class="container-fluid xyz">
+                <div class="row">
+                    <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                        <h1>Import pcap File</h1>
+                    </div>
+                </div>
+                <br>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                        <select id="pcap_files" size="10" style="min-width:150px;">
+                        </select>
+                    </div>
+                </div>
+                <br>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                        <button id="load-file-from-server" class="btn btn-primary">Load Selected File</button>
+                        <br>
+                        <br>
+                        <br>
+                        <button id="load-file-from-user" class="btn btn-primary">Load From File System...</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/jquery-3.1.0.min.js"></script>
+    <script src="/static/js/bootstrap.min.js"></script>
+    <script src="/static/js/cookie_wrapper.js"></script>
+    <script src="/static/js/load_navbars.js"></script>
+    <script src="/static/js/load_pcap.js"></script>
+
+</body>
+
+</html>
