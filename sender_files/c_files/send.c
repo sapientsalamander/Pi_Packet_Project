@@ -1,4 +1,6 @@
 #include <arpa/inet.h>
+#include <errno.h>
+#include <sys/file.h>
 #include <math.h>
 #include <netinet/tcp.h>
 #include <pcap.h>
@@ -24,7 +26,12 @@
 
 /* The file that we will create in order to initialize a socket between this
  * program and the UI program(s). */
-#define PYTHON_SOCKET "/tmp/send_socket"
+#define UI_SOCKET "/tmp/send_socket"
+
+/* The singleton file that we will attempt to create and lock. This is so
+ * that only one instance of this program can be run. If another instance
+ * attempts to run, the lock will fail, and it'll quietly exit. */
+#define SINGLETON_FILE "/tmp/send_singleton"
 
 /* The size of the buffer that holds incoming packets. */
 #define PCAP_BUFFER_SIZE 2097152
@@ -54,12 +61,17 @@ typedef struct {
     uint8_t *data;
 } __attribute__((packed)) SEASIDE;
 
+/* Singleton file, used to ensure only once instance of this program
+ * is running at a time. */
+static int singleton_file;
+
 /* These next few declarations are for the UI socket that we will be
  * opening, so we can redirect any incoming packets to the UI. */
 static struct sockaddr_un address;
 static int socket_fd;
 
-/* */
+/* The main server socket, located at UI_SOCKET. Other UI programs will
+ * attempt to connect to this socket. */
 static struct sockaddr *pointer_sock;
 static socklen_t size_sock;
 
@@ -98,7 +110,7 @@ static uint8_t sleep_time_seconds = 1;
 static int32_t sleep_time_useconds = 0;
 
 /* Initializes the socket that will be used to receive packet info from
- * the UI program. It binds to the file specified as PYTHON_SOCKET,
+ * the UI program. It binds to the file specified as UI_SOCKET,
  * and then listens in for any attempted connections. When it hears one,
  * we assume that it's the UI program, and we continue on our
  * merry way. */
@@ -115,7 +127,7 @@ initialize_socket(void)
     memset(&address, 0, sizeof(struct sockaddr_un)); /* Zero out address. */
 
     address.sun_family = AF_UNIX;
-    strcpy(address.sun_path, PYTHON_SOCKET);
+    strcpy(address.sun_path, UI_SOCKET);
     unlink(address.sun_path);
 
     /* Attempt to bind to the file, and then waits for the UI program
@@ -357,6 +369,10 @@ listen_packet_info(void *ui_fd_temp)
          * flag was sent). */
         unsigned int should_continue_sending = spam_packets;
 
+        /* WARNING: If more flags are added, make sure that any flags
+         * that directly deal with the sending thread (and should kill
+         * the sending thread) are updated here, and also at the end
+         * of this function. */
         switch (seaside_header.type) {
         case SEASIDE_PACKET:
         case SEASIDE_START:
@@ -429,6 +445,7 @@ listen_packet_info(void *ui_fd_temp)
             if (send(ui_fd, &packet_len, sizeof(packet_len), 0) < 0) {
                 fprintf(stderr, "Error with send to ui_fd\n");
             }
+            printf("Send packet size\n");
             break;
 
         default:
@@ -436,6 +453,10 @@ listen_packet_info(void *ui_fd_temp)
             break;
         }
 
+        /* WARNING: If more flags are added, make sure that any flags
+         * that directly deal with the sending thread (and should kill
+         * the sending thread) are updated here, and also at the beginning
+         * of this function. */
         switch (seaside_header.type) {
         case SEASIDE_PACKET:
         case SEASIDE_START:
@@ -475,11 +496,32 @@ accept_connections(void)
     return -1;
 }
 
+static int
+lock_single_instance_file(void)
+{
+    singleton_file = open(SINGLETON_FILE, O_CREAT | O_RDWR, 0666);
+    if (flock(singleton_file, LOCK_EX | LOCK_NB)) {
+        if (errno == EWOULDBLOCK) {
+            fprintf(stderr, "The singleton file is already created. It's "
+                    "assumed an instance of this program is already running."
+                    " Exiting.\n");
+            return -1;
+            
+        }
+    }
+    return 0;
+}
+
 /* Initializes pcap and the socket, and then sends the packet that was
  * received from the UI program. */
 int
 main(void)
 {
+    if (lock_single_instance_file()) {
+        printf("Error in lock_single_instance_file().\n");
+        return -1;
+    }
+
     if (initialize_pcap()) {
         printf("Error in initialize_pcap().\n");
         return -1;

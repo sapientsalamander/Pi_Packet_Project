@@ -3,7 +3,9 @@ import struct
 from enum import Enum
 
 SEASIDE_FLAGS = Enum('SEASIDE_FLAGS',
-                     'PACKET START STOP DELAY NUM_PACKETS SINGLE_PACKET',
+                     'PACKET START STOP DELAY NUM_PACKETS SINGLE_PACKET\
+                     GET_PACKET GET_BANDWIDTH GET_PACKET_SIZE START_SEQUENCE\
+                     STOP_SEQUENCE',
                      start=0)
 
 

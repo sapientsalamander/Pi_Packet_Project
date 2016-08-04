@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 import fcntl
+import os
 import sys
 
 import socket
 import time
+import thread
 import threading
 import struct
 
@@ -34,24 +36,14 @@ def update_statistics_loop(c_socket, c_socket_lock):
     Calculates bandwidth using change in bytes received over time.
     Calculates CPU using psutil.
     """
-
-    time_cur = time.time()
     while True:
-        time_prev = time_cur
+        d_bytes = SEASIDE.request_SEASIDE(c_socket, c_socket_lock,
+                                          SEASIDE_FLAGS.GET_BANDWIDTH.value)
 
-        time_cur = time.time()
-
-        # TODO: Update flags, remove hardcoded 8
-        d_bytes = SEASIDE.request_SEASIDE(c_socket, c_socket_lock, 8)
-        print 'BYTES: ', repr(d_bytes)
-
-        d_bytes = struct.unpack('=I', d_bytes)
+        d_bytes = struct.unpack('=Q', d_bytes)
         d_bytes = d_bytes[0]
 
-        d_time = time_cur - time_prev
-        bw = conversions.convert_bandwidth_bits_per_second(d_bytes, d_time,
-                                                           len(packet), 8)
-        bw, bw_unit = conversions.convert_bandwidth_units(bw)
+        bw, bw_unit = conversions.convert_bandwidth_units(d_bytes)
 
         cpu, percore = computations.read_cpu_usage()  # percore unused
 
@@ -65,17 +57,11 @@ def user_interaction(lcd, lcd_lock, c_socket, c_socket_lock):
     is_sending = False
 
     global packet
-    packet = conversions.convert_packet_int_array(
-        pgen.configure_packet(lcd, lcd_lock))
-    delay_seconds, delay_useconds = pgen.configure_delay(lcd, lcd_lock)
+
+    delay_seconds, delay_useconds = 1, 0
+    
     delay_bytes = conversions.convert_delay_bytes(delay_seconds,
                                                   delay_useconds)
-    SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
-                         SEASIDE_FLAGS.DELAY.value, delay_bytes)
-    time.sleep(1)
-    SEASIDE.send_SEASIDE(c_socket, c_socket_lock,
-                         SEASIDE_FLAGS.PACKET.value, packet)
-
     while True:
         if lcd.is_pressed(LCD.SELECT):  # Configure packet
             packet_temp = pgen.configure_packet(lcd, lcd_lock)
@@ -157,6 +143,7 @@ def main():
         sys.exit(0)
     # End of lock code.
 
+    global c_socket # Global so that the signal handler can close it.
     c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     SOCKET_ADDR = '/tmp/send_socket'
     while True:
@@ -170,17 +157,10 @@ def main():
     print 'Connected to socket'
 
     try:
-        display_thread = threading.Thread(target=display_loop,
-                                          name='DisplayThread')
-        statistics_thread = threading.Thread(target=update_statistics_loop,
-                                             name='StatisticsThread',
-                                             args=(c_socket, c_socket_lock))
-        display_thread.daemon = True
-        statistics_thread.daemon = True
-        display_thread.start()
-        statistics_thread.start()
+        thread.start_new_thread(display_loop, ())
+        thread.start_new_thread(update_statistics_loop, (c_socket, c_socket_lock))
     except:
-        print 'Error: ', sys.exc_info()[0]
+        print 'Error: ', sys.exc_info()
 
     user_interaction(lcd, lcd_lock, c_socket, c_socket_lock)
 

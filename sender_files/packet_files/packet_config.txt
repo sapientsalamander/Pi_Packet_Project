@@ -3,9 +3,7 @@
 # To use a custom packet of your own, paste the packet in byte form in 
 # Source values are retrieved from the device.
 
-# Change the default values for packet generation:
 
-# ========== Ethernet =======
 # Destination MAC address:
 dst_MAC = b8:27:eb:61:1b:d4
 
