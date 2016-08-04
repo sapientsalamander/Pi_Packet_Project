@@ -1,4 +1,4 @@
-def lock_anddisplay_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
+def lock_and_display_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
     """Changes the LED color for different amounts of traffic.
 
     bandwidth -- the amount of traffic

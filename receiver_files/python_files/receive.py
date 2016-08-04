@@ -63,61 +63,13 @@ lcd_lock = thread.allocate_lock()
 packet = scapy.Ether()
 
 
-def display_bandwidth_LED(bandwidth, bw_unit):
-    """Shines the LED at a certain color based on receiving bandwidth.
-
-    It increases from Green -> Blue -> Red from bps -> Kbps -> Mbps.
-    If there's no traffic, then it just shuts the LED off.
-
-    Args:
-        bandwidth: Bandwidth for traffic coming in.
-        bw_unit: The units for the bandwidth, ex. Mbps.
-    """
-    color = (0, 0, 0)
-    if bw_unit == 'bps' and bandwidth == 0:
-        color = (0, 0, 0)
-    elif bw_unit == 'bps':
-        color = (0, 1, 0)
-    elif bw_unit == 'Kbps':
-        color = (0, 0, 1)
-    elif bw_unit == 'Mbps':
-        color = (1, 0, 0)
-    elif bw_unit == 'Gbps':
-        color = (1, 1, 1)
-
-    with lcd_lock:
-        lcd.set_color(*color)
-
-
 def display_loop():
-    """Pull in screen_output and update screen based on which one should
-    be currently up.
-    """
+    """Pull in screen_output, and updates the LCD screen display."""
     while True:
         for i in xrange(2):
-            _print_line(screen_output[cur_screen][i], i)
+            thread_lcd.lock_and_print_lcd_line(
+                lcd, lcd_lock, screen_output[cur_screen][i], i)
         time.sleep(0.7)
-
-
-def _print_line(message, line):
-    """Print message to screen on line, multithreading safe.
-
-    Locks the LCD so that only one thread can write to it at a time.
-    Also ensures that writing to a line won't clear the entire screen.
-
-    WARNING: Should never be called directly, instead you should rely
-    on the screen_output list to display any information.
-
-    Args:
-        message: The message to print.
-        line: The line to print it on.
-    """
-    # Pad with spaces, manually clearing the line on LCD.
-    message = message.ljust(20)
-
-    with lcd_lock:
-        lcd.set_cursor(0, line)
-        lcd.message(message)
 
 
 def update_packet_info(packet, number_packets_received):
@@ -128,10 +80,12 @@ def update_packet_info(packet, number_packets_received):
         packet: A capture scapy packet.
         number_packets_received: Packets received since program started.
     """
-    screen_output[Screens.Summary.value][0] = ('Rx:%3d ' % number_packets_received)
+    screen_output[Screens.Summary.value][0] = ('Rx:%3d ' %
+                                               number_packets_received)
 
     # Grabs the payload from the scapy packet. If none is available,
     # or if packet is not a scapy packet, then it cannot parse the payload.
+    # TODO: Refactor it, so it doesn't rely on the LCD having only two lines.
     try:
         string_payload = packet.getlayer(scapy.Raw).load
         index = string_payload.find('\n')
@@ -145,12 +99,12 @@ def update_packet_info(packet, number_packets_received):
 
     # MAC address
     eth_out = packet.getlayer(scapy.Ether).src
-    # TODO: Make MAC address look nicer
+    # TODO: Make MAC address look nicer.
     screen_output[Screens.Source.value][0] = eth_out.replace(':', '')
 
     # IP address, may not always be available, so we wrap it in a try
     # except block.
-    # TODO: Make it so that the packet can show fields other than IP
+    # TODO: Make it so that the packet can show fields other than IP.
     try:
         screen_output[Screens.Source.value][1] = packet.getlayer(scapy.IP).src
     except (AttributeError):
@@ -169,7 +123,6 @@ def update_statistics_loop():
     rx_cur = computations.compute_interface_bytes(INTERFACE, 'rx')
     time_cur = time.time()
     while True:
-        # Bandwidth calculations.
         rx_prev = rx_cur
         time_prev = time_cur
 
@@ -178,24 +131,23 @@ def update_statistics_loop():
 
         bw_bits_second = conversions.convert_bandwidth_bits_per_second(
             rx_cur - rx_prev, time_cur - time_prev, len(packet), -14)
+
         bandwidth, bw_unit = conversions.convert_bandwidth_units(
             bw_bits_second)
 
-        display_bandwidth_LED(bandwidth, bw_unit)
+        thread_lcd.lock_and_display_bandwidth_LED(
+            lcd, lcd_lock, bandwidth, bw_unit)
 
-        # Ex. Bw: 30.5 Kbps.
         bandwidth_output = 'Bw:%5.1f %s' % (bandwidth, bw_unit)
 
         screen_output[Screens.Summary.value][1] = bandwidth_output
-        # End of bandwidth calculations.
 
-        average_cpu_usage, per_core_cpu_usage = computations.compute_cpu_usage()
-        # cpu calculations.
-        screen_output[Screens.CPU.value][0] = 'CPU Usage: %4.1f%%' % \
-                                        (average_cpu_usage)
-        screen_output[Screens.CPU.value][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
-                                        tuple(per_core_cpu_usage)
-        # End of cpu calculations.
+        avg_cpu_usage, per_core_cpu_usage = computations.compute_cpu_usage()
+        screen_output[Screens.CPU.value][0] = \
+            'CPU Usage: %4.1f%%' % (avg_cpu_usage)
+
+        screen_output[Screens.CPU.value][1] = \
+            '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % tuple(per_core_cpu_usage)
 
         time.sleep(1)
 
@@ -231,6 +183,13 @@ def listen_packets_loop():
     while True:
         # Receive any packet that the C side has sent over.
         c_input = connection.recv(2048)
+        if c_input == -1:
+            print 'Error with SEASIDE socket.'
+            break
+
+        elif c_input == '':
+            print 'Error: Cannot parse empty input.'
+            break
 
         number_packets_received += 1
 
