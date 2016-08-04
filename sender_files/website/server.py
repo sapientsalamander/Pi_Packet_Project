@@ -18,18 +18,36 @@ c_socket_lock = threading.Lock()
 def str_to_class(string):
     return reduce(getattr, string.split("."), sys.modules[__name__])
 
+def configure_packet_layers(packet_layers):
+    packet_layers = json.loads(packet_layers)
+    packet = Packet()
+
+    for layer in packet_layers:
+        layer_type = str_to_class(layer['layer_type'])
+        temp = layer_type()
+        for key in layer:
+            if layer[key] != '' and key != 'layer_type':
+                setattr(temp, key, type(getattr(layer_type(), key))(layer[key]))
+        packet /= temp
+
+    packet.show()
+ 
+
 class PacketServer(object):
     @cherrypy.expose
     def index(self):
         return open('index.html')
 
+
     @cherrypy.expose
     def construct_packet(self):
         return open('construct_packet.html')
 
+
     @cherrypy.expose
     def configure_speed(self):
         return open('configure_speed.html')
+
 
     @cherrypy.expose
     def send(self):
@@ -41,18 +59,7 @@ class PacketServer(object):
         if packet_layers == '[]':
             return
 
-        packet_layers = json.loads(packet_layers)
-        packet = Packet()
-
-        for layer in packet_layers:
-            layer_type = str_to_class(layer['layer_type'])
-            temp = layer_type()
-            for key in layer:
-                if layer[key] != '' and key != 'layer_type':
-                    setattr(temp, key, type(getattr(layer_type(), key))(layer[key]))
-            packet /= temp
-
-        packet.show()
+        packet = configure_packet_layers(packet_layers)
         packet = conversions.convert_packet_int_array(packet)
         SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
             
@@ -65,11 +72,21 @@ class PacketServer(object):
 
     @cherrypy.expose
     def command_and_respond(self, command, size):
-        SEASIDE.request_SEASIDE(c_socket, c_socket_lock, int(command))
-        temp = c_socket.recv(2048)
+        print 'COMMAND_AND_RESPOND'
+        temp = SEASIDE.request_SEASIDE(c_socket, c_socket_lock, int(command))
         print temp, ' ', len(temp), ' ', repr(temp)
-        temp = struct.unpack('=' + size, repr(temp))[0]
-        return struct.pack('!' + size, temp)
+        temp = struct.unpack('=' + size, temp)[0]
+        temp = struct.pack('!' + size, temp)
+        return temp.encode('hex')
+
+
+    @cherrypy.expose
+    def save_packet_to_file(file_name, packet_layers):
+        if file_name == '':
+            return
+        packet = configure_packet_layers(packet_layers)
+        wrpcap('pcap_files/' + file_name, packet)
+
 
 if __name__ == '__main__':
     os.chdir('sender_files/website/')

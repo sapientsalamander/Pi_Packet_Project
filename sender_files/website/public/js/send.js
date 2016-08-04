@@ -16,7 +16,7 @@ $(document).ready(function () {
     function byte_array_to_long(/*byte[]*/byteArray) {
         var value = 0;
         for (var i = 0; i < byteArray.length; ++i) {
-            value = (value * 256) + byteArray[i];
+            value = (value * 256) + byteArray[i] * 1;
         }
         return value;
     };
@@ -46,14 +46,11 @@ $(document).ready(function () {
     function update_bar() {
         $.ajax({
             type: "POST",
-            url: "command_and_respond?command=7;size=Q;;",
-            contentType: "application/json; charset=utf-8",
+            url: "command_and_respond?command=7&size=Q",
             success: function (data) {
-                console.log(data);
                 var band = $("#bandwidth-bar");
                 var max = parseInt(band.attr("aria-valuemax"));
-                var bandwidth = byte_array_to_long(string_to_byte_array(data));
-                console.log(bandwidth);
+                var bandwidth = parseInt(data, 16);
                 band.css("width", String(bandwidth / MAX_LINE_RATE * 100) + "%");
                 band.html(calculate_bandwidth(bandwidth));
             },
@@ -66,7 +63,8 @@ $(document).ready(function () {
     $("#start-sending").click(function () {
         $.ajax({
             type: "POST",
-            url: "command?command=1;data=None;",
+            url: "command?command=1&data=None",
+            contentType: "application/json; charset=utf-8",
         });
     });
 
@@ -74,6 +72,7 @@ $(document).ready(function () {
         $.ajax({
             type: "POST",
             url: "command?command=2;data=None;",
+            contentType: "application/json; charset=utf-8",
         });
     });
 
@@ -81,6 +80,7 @@ $(document).ready(function () {
         $.ajax({
             type: "POST",
             url: "command?command=5;data=None;",
+            contentType: "application/json; charset=utf-8",
         });
     });
     
