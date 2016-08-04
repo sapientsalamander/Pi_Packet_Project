@@ -33,7 +33,7 @@ def convert_packet_delay(pps):
     return (int(seconds), int(useconds))
 
 
-def convert_bandwidth_bits_per_second(d_bytes, d_time, sys_err=0):
+def convert_bandwidth_bits_per_second(d_bytes, d_time, pac_len=0, sys_err=0):
     """Calculates the bandwidth, taking in delta bytes and delta time and
     outputting bandwidth in bits per second.
 
@@ -46,18 +46,16 @@ def convert_bandwidth_bits_per_second(d_bytes, d_time, sys_err=0):
     """
     # TODO: Instead of relying on system info (which is apparently
     # error-prone), receive number of bytes from C side, using SEASIDE.
-    d_bytes = rx_cur - rx_prev
-    d_time = time_cur - time_prev
     try:
-        num_packets = d_bytes / (len(packet) + sys_err)
+        num_packets = d_bytes / (pac_len + sys_err)
     except (ZeroDivisionError):
         num_packets = 0
 
     # Bandwidth (bits/s) = (packets * size packet / delta time) * 8 bits / byte
-    bandwidth = (num_packets * len(packet))/(d_time) * 8
+    return (num_packets * pac_len) / (d_time) * 8
 
 
-def convert_bandwidth_unit(bandwidth):
+def convert_bandwidth_units(bandwidth):
     """Calculate the most appropriate unit for a given number of bps.
 
     Args:

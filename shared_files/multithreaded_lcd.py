@@ -11,7 +11,7 @@ def lock_anddisplay_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
             lcd.set_color(0, 0, 1)
         elif bw_unit == 1:
             lcd.set_color(0, 1, 0)
-    elif bw_unit == 2:
+        elif bw_unit == 2:
             lcd.set_color(1, 0, 0)
 
 

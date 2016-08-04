@@ -21,11 +21,15 @@ import os
 import socket
 import time
 import thread
+from enum import Enum
 
 import scapy.all as scapy
 import psutil
 import Adafruit_CharLCD as LCD
-from shared_files import shared_functions
+
+from shared_files import multithreaded_lcd as thread_lcd
+from shared_files import computations
+from shared_files import conversions
 
 # The file used to initialize the socket to communicate with C program.
 SOCKET_ADDR = '/tmp/receive_socket'
@@ -35,10 +39,10 @@ INTERFACE = 'eth0'
 
 # Creating the class, called Screens, which represents the different screens
 # on the LCD that can be accessed via the four directional buttons.
-Screens = shared_functions.enums('Summary', 'Payload', 'Source', 'CPU', 'Num')
+Screens = Enum('Screens', 'Summary Payload Source CPU', start=0)
 
 # Used to determine which screen should currently be shown.
-cur_screen = Screens.Summary
+cur_screen = Screens.Summary.value
 
 # Hold information for all screens, so screens in the background can
 # still be updating and storing new information. Contains a list of tuples,
@@ -47,7 +51,7 @@ cur_screen = Screens.Summary
 # TODO: Currently relies on the nature of atomic operations and the Global
 # Interpreter Lock. Might want to change it so it is an structure with
 # actual multithreaded support.
-screen_output = [['', ''] for x in xrange(Screens.Num)]
+screen_output = [['', ''] for x in xrange(len(Screens))]
 
 # An LCD lock, to ensure that the two threads, one for port listening and
 # one for bandwidth measuring, do not interfere when updating the LCD.
@@ -124,7 +128,7 @@ def update_packet_info(packet, number_packets_received):
         packet: A capture scapy packet.
         number_packets_received: Packets received since program started.
     """
-    screen_output[Screens.Summary][0] = ('Rx:%3d ' % number_packets_received)
+    screen_output[Screens.Summary.value][0] = ('Rx:%3d ' % number_packets_received)
 
     # Grabs the payload from the scapy packet. If none is available,
     # or if packet is not a scapy packet, then it cannot parse the payload.
@@ -132,74 +136,66 @@ def update_packet_info(packet, number_packets_received):
         string_payload = packet.getlayer(scapy.Raw).load
         index = string_payload.find('\n')
         if index == -1:
-            screen_output[Screens.Payload][0] = string_payload
+            screen_output[Screens.Payload.value][0] = string_payload
         else:
-            screen_output[Screens.Payload][0] = string_payload[:index]
-            screen_output[Screens.Payload][1] = string_payload[index+1:]
+            screen_output[Screens.Payload.value][0] = string_payload[:index]
+            screen_output[Screens.Payload.value][1] = string_payload[index+1:]
     except AttributeError:
-        screen_output[Screens.Payload][0] = 'No payload'
+        screen_output[Screens.Payload.value][0] = 'No payload'
 
     # MAC address
     eth_out = packet.getlayer(scapy.Ether).src
     # TODO: Make MAC address look nicer
-    screen_output[Screens.Source][0] = eth_out.replace(':', '')
+    screen_output[Screens.Source.value][0] = eth_out.replace(':', '')
 
     # IP address, may not always be available, so we wrap it in a try
     # except block.
     # TODO: Make it so that the packet can show fields other than IP
     try:
-        screen_output[Screens.Source][1] = packet.getlayer(scapy.IP).src
+        screen_output[Screens.Source.value][1] = packet.getlayer(scapy.IP).src
     except (AttributeError):
-        screen_output[Screens.Source][1] = ''
+        screen_output[Screens.Source.value][1] = ''
 
 
 def update_statistics_loop():
-    """Calculate the bandwidth and cpu usage and displays it on the LCD.
+    """Gets cpu usage and bandwidth and displays it on the LCD.
 
     Currently, the bandwidth calculation is done by reading from
     /sys/class/net/[interface]. However, we are not able to get super
     accurate results from it. We currently have plans to move it so that
     the C side will tell us how many packets it has received.
     TODO: Update the info above as soon as we move to SEASIDE.
-
-    The CPU calculation is done by a library called psutil.
     """
-    rx_cur = shared_functions.get_interface_bytes(INTERFACE, 'rx')
+    rx_cur = computations.compute_interface_bytes(INTERFACE, 'rx')
     time_cur = time.time()
     while True:
         # Bandwidth calculations.
         rx_prev = rx_cur
         time_prev = time_cur
 
-        rx_cur = shared_functions.get_interface_bytes(INTERFACE, 'rx')
+        rx_cur = computations.compute_interface_bytes(INTERFACE, 'rx')
         time_cur = time.time()
 
-        # TODO: Instead of relying on system info (which is apparently
-        # error-prone), receive number of bytes from C side, using SEASIDE
-        d_bytes = rx_cur - rx_prev
-        try:
-            num_packets = d_bytes / (len(packet) - 14)
-        except (ZeroDivisionError):
-            num_packets = 0
-
-        # Bandwidth (bits/s) = (delta bytes / delta time) * 8 bits / byte.
-        bandwidth = (num_packets * len(packet))/(time_cur - time_prev) * 8
-        bandwidth, bw_unit = shared_functions.calculate_bandwidth(bandwidth)
+        bw_bits_second = conversions.convert_bandwidth_bits_per_second(
+            rx_cur - rx_prev, time_cur - time_prev, len(packet), -14)
+        bandwidth, bw_unit = conversions.convert_bandwidth_units(
+            bw_bits_second)
 
         display_bandwidth_LED(bandwidth, bw_unit)
 
         # Ex. Bw: 30.5 Kbps.
         bandwidth_output = 'Bw:%5.1f %s' % (bandwidth, bw_unit)
 
-        screen_output[Screens.Summary][1] = bandwidth_output
+        screen_output[Screens.Summary.value][1] = bandwidth_output
         # End of bandwidth calculations.
 
-        # CPU calculations.
-        screen_output[Screens.CPU][0] = 'CPU Usage: %4.1f%%' % \
-                                        (psutil.cpu_percent())
-        screen_output[Screens.CPU][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
-                                        tuple(psutil.cpu_percent(percpu=True))
-        # End of CPU calculations.
+        average_cpu_usage, per_core_cpu_usage = computations.compute_cpu_usage()
+        # cpu calculations.
+        screen_output[Screens.CPU.value][0] = 'CPU Usage: %4.1f%%' % \
+                                        (average_cpu_usage)
+        screen_output[Screens.CPU.value][1] = '%2.0f%% %2.0f%% %2.0f%% %2.0f%%' % \
+                                        tuple(per_core_cpu_usage)
+        # End of cpu calculations.
 
         time.sleep(1)
 
@@ -255,13 +251,13 @@ def input_loop():
     global cur_screen
     while True:
         if lcd.is_pressed(LCD.UP):
-            cur_screen = Screens.Summary
+            cur_screen = Screens.Summary.value
         elif lcd.is_pressed(LCD.DOWN):
-            cur_screen = Screens.Payload
+            cur_screen = Screens.Payload.value
         elif lcd.is_pressed(LCD.LEFT):
-            cur_screen = Screens.Source
+            cur_screen = Screens.Source.value
         elif lcd.is_pressed(LCD.RIGHT):
-            cur_screen = Screens.CPU
+            cur_screen = Screens.CPU.value
 
 
 if __name__ == '__main__':
@@ -284,7 +280,7 @@ if __name__ == '__main__':
     lcd.set_color(0, 0, 0)
     lcd.clear()
 
-    screen_output[Screens.Summary][0] = 'Awaiting packets'
+    screen_output[Screens.Summary.value][0] = 'Awaiting packets'
 
     try:
         thread.start_new_thread(display_loop, ())
