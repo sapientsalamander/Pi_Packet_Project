@@ -3,43 +3,44 @@
 # To use a custom packet of your own, paste the packet in byte form in 
 # Source values are retrieved from the device.
 
+Ethernet {
+    # Destination MAC address:
+    dst = b8:27:eb:61:1b:d4
 
-# Destination MAC address:
-dst_MAC = b8:27:eb:61:1b:d4
+    # Ethernet frame type:
+    ethtype = 0x0800
+}
+IP {
+    # Destination IP address:
+    dst_IP = 10.0.24.243
 
-# Ethernet frame type:
-ethtype = 0x0800
+    # Time to Live:
+    ttl = 64
+}
+TCP {
+    # TCP Source Port:
+    TCP_srcport = 4321
 
-# ========== IP =============
-# Destination IP address:
-dst_IP = 10.0.24.243
+    # TCP Destination Port:
+    TCP_dstport = 4321
+}
+UDP {
+    # UDP Source Port:
+    UDP_srcport = 4321
 
-# Time to Live:
-ttl = 64
+    # UDP Destination Port:
+    UDP_dstport = 4321
+}
+802.1Q {
+    vlan_id = 1
+    priority = 0
+    vlan_type = 0x8100
+    DEI = 0
+}
+Other {
+    # Set delay between packets:
+    delay = 1.0
 
-# ========== TCP ============
-# TCP Source Port:
-TCP_srcport = 4321
-
-# TCP Destination Port:
-TCP_dstport = 4321
-
-# ========== UDP ============
-# UDP Source Port:
-UDP_srcport = 4321
-
-# UDP Destination Port:
-UDP_dstport = 4321
-
-# ========== VLAN ===========
-vlan_id = 1
-priority = 0
-vlan_type = 0x8100
-DEI = 0
-
-# ========== Other ==========
-# Set delay between packets:
-delay = 1.0
-
-# Pcap file to load packet from:
-pkt_file = packet.pcap
+    # Pcap file to load packet from:
+    pkt_file = packet.pcap
+}

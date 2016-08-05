@@ -43,6 +43,8 @@ from scapy.all import *
 
 from shared_files import SEASIDE
 from shared_files import conversions
+from sender_files.python_files import data_sanitization as ds
+from sender_files.python_files import dictionaries as dicts
 
 # A socket for interaction with the C side, and a lock to ensure that no two
 # web requests can write at the same time.
@@ -115,8 +117,12 @@ def configure_packet_layers(packet_layers):
             if layer[key] != '' and key != 'layer_type':
                 # Gets the type of the field (int, str), so we can cast it
                 # to its appropriate type.
-                type_of_field = type(getattr(layer_type(), key))
-                setattr(temp_layer, key, type_of_field(layer[key]))
+                print 'Value: ', layer[key], ' | ', layer_type, ' | ', key
+                try:
+                    sanitized_field = ds.sanitize(layer[key], dicts.SAN_SCAPY[layer_type][key])
+                except KeyError:
+                    sanitized_field = layer[key]
+                setattr(temp_layer, key, sanitized_field)
         # Add the configured layer to the packet.
         packet /= temp_layer
     packet.show()

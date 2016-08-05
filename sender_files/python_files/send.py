@@ -3,6 +3,7 @@
 import fcntl
 import os
 import sys
+import signal
 
 import socket
 import time
@@ -18,6 +19,14 @@ from shared_files import lcd_input as LCD
 from shared_files import multithreaded_lcd as threaded_lcd
 from shared_files import SEASIDE
 from shared_files.SEASIDE import SEASIDE_FLAGS
+
+
+def sigint_handler(signum, frame):
+    global c_socket
+    c_socket.shutdown(socket.SHUT_RDWR)
+    c_socket.close()
+
+    raise KeyboardInterrupt
 
 
 def display_loop():
@@ -123,11 +132,6 @@ def main():
     screen_output = ['', '']
 
     global packet
-    defaults = computations.read_defaults()
-    packet = (scapy.Ether(dst=defaults['dst_MAC']) /
-              scapy.IP(dst=defaults['dst_IP']) /
-              scapy.UDP(sport=int(defaults['UDP_srcport']),
-                        dport=int(defaults['UDP_dstport'])))
 
     # Lock to only allow one instance of this program to run
     # Opens (and creates if non-existent) a file in /tmp/, and attempts to lock
@@ -153,6 +157,7 @@ def main():
         except:
             time.sleep(1)
             print 'Trying to connect...'
+    def_handler = signal.signal(signal.SIGINT, sigint_handler)
 
     print 'Connected to socket'
 

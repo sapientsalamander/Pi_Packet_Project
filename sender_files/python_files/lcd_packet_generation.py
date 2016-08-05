@@ -25,7 +25,7 @@ def configure_packet(lcd, lcd_lock):
             elif layer == 'Cancel':
                 return None
             elif layer == 'Load Packet':
-                return computations.read_pcap_file(dicts.DEFAULTS['pkt_file'])
+                return computations.read_pcap_file(dicts.DEFAULTS['Other']['pkt_file'])
             elif layer == scapy.Raw:
                 packet.append(configure_Raw_layer(lcd, lcd_lock))
             else:
@@ -61,9 +61,12 @@ def configure_layer(lcd, lcd_lock, layer):
     """
     p_layer = layer()
     for key in dicts.LAYER[layer].keys():
-        default = ds.sanitize(dicts.LAYER[layer][key][1],
-                              dicts.SAN_LCD[layer][key])
-        val = lcd.get_input(key + ':\n' + dicts.LAYER[layer][key][0], default)
+        try:
+            default = ds.sanitize(dicts.DEFAULTS[layer.name][key],
+                                  dicts.SAN_LCD[layer][key])
+        except KeyError:
+            continue
+        val = lcd.get_input(key + ':\n' + dicts.LAYER[layer][key], default)
         val = val.replace('\n', '')
 
         field, value = val.split(':')
@@ -105,7 +108,7 @@ def configure_delay(lcd, lcd_lock):
     """Configures the delay in seconds between packets to be sent."""
     with lcd_lock:
         delay = lcd.get_input('Delay:\n%i%i%i.%i%i%i%i',
-                              '%08.4f' % float(dicts.DEFAULTS['delay']))
+                              '%08.4f' % float(dicts.DEFAULTS['Other']['delay']))
     delay = float(delay[7:])
 
     delay_seconds = int(delay)

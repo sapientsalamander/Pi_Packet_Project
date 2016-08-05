@@ -23,6 +23,7 @@ Example:
 # behind it (to hold the enum, format specifier, and values an Input_Char
 # can hold.
 
+
 class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
 
     # An enum to represent the different values that you can be prompted for.
@@ -31,7 +32,7 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
     Input_Type = Enum('Input_Type', 'Char Int Hex', start=0)
 
     # An extendable tuple, one for each type of input we want. See above for
-    # examples. 
+    # examples.
     # For each tuple withing Value_Types, here's what they represent:
     # Input_Type.___: An enum for the type of input.
     # 'char': The formatter that is passed when doing get_input('%char')
@@ -383,7 +384,7 @@ class LCD_Input_Wrapper(Adafruit_CharLCDPlate):
             i += advance
             list_chars.append(char)
 
-        if default != None:
+        if default is not None:
             list_chars = self.use_default(list_chars, default)
 
         index = self.find_next_input(list_chars, -1)

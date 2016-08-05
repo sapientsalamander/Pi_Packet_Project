@@ -1,11 +1,29 @@
+"""Functions to safely use an LCD screen with multiple threads.
+
+The functions are mostly wrappers for the LCD_Input_Wrapper and
+Adafruit_CharLCDPlate functions used with a multithreading lock.
+"""
 import time
 
 
 def lock_and_display_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
-    """Changes the LED color for different amounts of traffic.
+    """Changes the LED color based on the unit of traffic.
 
-    bandwidth -- the amount of traffic
-    bw_unit -- the unit accompanying the bandwidth (bps, Kbps, Mbps)
+    Colors used are:
+        Off   - No traffic
+        Blue  - bits per second
+        Green - kilobits per second
+        Red   - megabits per second
+
+    Args:
+        lcd (LCD_Input_Wrapper object): The LCD screen to use.
+
+        lcd_lock (RLock or lock): Lock associated with the LCD screen.
+
+        bandwidth (int): The current bandwidth usage. Used to differentiate
+                         between very low and no traffic.
+
+        bw_unit (int): The unit accompanying the bandwidth (bps, Kbps, Mbps)
     """
     with lcd_lock:
         if bw_unit == 0 and bandwidth == 0:
@@ -28,6 +46,11 @@ def lock_and_print_lcd_line(lcd, lcd_lock, message, line):
 
     Locks the LCD so that only one thread can write to it at a time.
     Also ensures that writing to a line won't clear the entire screen.
+
+    Args:
+        lcd (LCD_Input_Wrapper object): The LCD screen to use.
+
+        lcd_lock (RLock or lock): Lock associated with the LCD screen.
     """
     # Pad with spaces, manually clearing the line on LCD.
     message = message.ljust(20)

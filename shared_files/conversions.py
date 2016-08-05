@@ -1,3 +1,13 @@
+"""Functions for converting various things from one form to another.
+
+Most functions convert the parameter to a different type. If not, they convert
+units.
+
+convert_packet_int_array: Converts a Scapy packet to an array of ints.
+convert_bandwidth_units: Calculate the unit for a given bps.
+convert_delay_bytes: Converts time in seconds and microseconds to a bytearray.
+
+"""
 import struct
 
 
@@ -7,7 +17,7 @@ def convert_packet_int_array(pac):
     tmp = [x + y for x, y in zip(tmp[0::2], tmp[1::2])]
     return map(lambda x: int(x, 16), tmp)
 
-
+# TODO Remove, unused
 def convert_MAC_addr(address):
     """Converts a MAC address from ffffff-ffffff to ff:ff:ff:ff:ff:ff"""
     mac = []
@@ -16,13 +26,13 @@ def convert_MAC_addr(address):
         mac.append(address[i:i+2])
     return ':'.join(mac)
 
-
+# TODO Remove, unused
 def convert_packet_delay(pps):
     """Calculates a delay between packets given the desired number of
     packets per second.
 
     Args:
-        pps - desired number of packets per second
+        pps: desired number of packets per second
 
     Returns:
         int: The number of whole seconds and microseconds
@@ -34,7 +44,7 @@ def convert_packet_delay(pps):
         useconds = 0
     return int(useconds)
 
-
+# TODO Remove, unused
 def convert_bandwidth_bits_per_second(d_bytes, d_time,
                                       pac_len=0, sys_err=0):
     """Calculates the bandwidth, taking in delta bytes and delta time and
@@ -47,8 +57,6 @@ def convert_bandwidth_bits_per_second(d_bytes, d_time,
     Returns:
         float: Bandwidth in bits per second.
     """
-    # TODO: Instead of relying on system info (which is apparently
-    # error-prone), receive number of bytes from C side, using SEASIDE.
     try:
         num_packets = d_bytes / (pac_len + sys_err)
     except (ZeroDivisionError):

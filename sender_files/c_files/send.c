@@ -338,13 +338,18 @@ listen_packet_info(void *ui_fd_temp)
 {
     /* Temporary variables to store any received data, before moving it
      * to the global scope. */
-    static uint8_t packet_temp[UI_BUFFER_SIZE];
+    uint8_t packet_temp[UI_BUFFER_SIZE];
     ssize_t packet_len_temp;
 
     int ui_fd = *(int *) ui_fd_temp;
     while (1) {
-        while ((packet_len_temp = 
-               recv(ui_fd, packet_temp, UI_BUFFER_SIZE, 0)) <= 0);
+        packet_len_temp = recv(ui_fd, packet_temp, UI_BUFFER_SIZE, 0);
+
+        /* EOF signal received, will close socket in orderly manner. */
+        if (packet_len_temp == 0) {
+            close(ui_fd);
+            return (void *) NULL;
+        }
 
         SEASIDE seaside_header;
 

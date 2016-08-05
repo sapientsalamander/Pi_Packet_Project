@@ -7,15 +7,24 @@ have a layer of indirection, so we don't have to read the files ourselves,
 but use a library as an interface. As examples, various computations can be
 getting the bandwidth on an interface, cpu usage, MAC address, etc.
 
+
+read_cpu_usage: Calculates cpu usage using the psutil library.
+read_pcap_file: Reads a pcap file and returns the first packet.
+read_MAC: Returns the MAC address of the interface.
+read_defaults: Reads in the packet defaults from packet_config.
+get_ip_addr: Gets the ip address of an interface.
+
 TODO: Find a better name than computations?
 TODO: Error checking!
 """
 import os
+import re
 
 import psutil
 import netifaces
 import scapy.all as scapy
 
+# TODO Remove, unused
 def read_interface_bytes(interface, io):
     """Return the total number of rx_bytes or tx_bytes since startup.
 
@@ -23,8 +32,13 @@ def read_interface_bytes(interface, io):
     contains networking information about different interfaces, and we just
     pull the number of bytes received / sent over eth0 since startup.
 
+    Args:
+        interface (str): the name of the interface to gather information from.
+
+        io (str): the direction to read from (tx or rx)
+
     Returns:
-        The number of bytes received / sent over eth0 since startup.
+        int: Number of bytes received/sent over the interface since startup.
     """
     try:
         with open('/sys/class/net/%s/statistics/%s_bytes' % (interface, io),
@@ -38,9 +52,8 @@ def read_cpu_usage():
     """Calculates cpu usage using the psutil library.
 
     Returns:
-        tuple (float, list): The first return value is the average
-        cpu usage, while the second argument is the cpu usage
-        per core.
+        tuple (float, list): The first value is the average cpu usage, while
+        the second value is the cpu usage per core.
         """
     return (psutil.cpu_percent(), psutil.cpu_percent(percpu=True))
 
@@ -58,18 +71,18 @@ def read_pcap_file(fname):
     return p[0]
 
 
-def read_MAC():
-    """Returns the MAC address of the eth0 interface.
+def read_MAC(interface):
+    """Returns the MAC address of the interface.
 
+    Args:
+        interface (str): the name of the interface.
     Returns:
         str: MAC address of the eth0 interface, or all 0s if there's an error.
-
-    TODO: Generalized so it can get the MAC address of any interface.
     """
     try:
-        with open('/sys/class/net/eth0/address') as file:
+        with open('/sys/class/net/%s/address' % interface) as file:
             return file.read().strip()
-    except:
+    except (IOError):
         print 'Error, cannot read MAC address'
         return '00:00:00:00:00:00'
 
@@ -78,29 +91,32 @@ def read_defaults():
     """Reads in the packet defaults from packet_config.
 
     Returns:
-        dict: A dictionary of mappings of different layers to a list of
-            dictionaries of layer fields to their default values.
-            Example:
-
-    TODO: Once the default list is done, make sure that we change this
-    function, and update any relevant documentation.
+        dict: A dictionary of mappings of layers to a list of dictionaries of
+        layer fields to their default values. For an example,
+        see the other dictionaries in python_files/dictionaries.py.
     """
     defaults = {}
-    with open('/home/pi/Sender/sender_files/packet_files/packet_config.txt',
-              'r') as conf:
-        fields = [val for val in conf.read().split('\n')
-                  if len(val) > 0 and val[0] != '#']
-    for field in fields:
-        name, value = field.split(' = ')
-        defaults[name] = value
-    defaults['src_MAC'] = read_MAC()
-    defaults['src_IP'] = get_ip_addr('eth0')
-    defaults['dst_IP'] = '.'.join(['%03d' % int(octal)
-                         for octal in defaults['dst_IP'].split('.')])
+    with open('/home/pi/Sender/sender_files/packet_files/config.txt',
+              'r') as configure_file:
+        defaults_file = configure_file.read()
+        matches = re.findall('^([a-zA-Z0-9_.]*?)\s*\\{\s*(.*?)\s*\\}',
+                             defaults_file, re.MULTILINE | re.DOTALL)
+        for layer in matches:
+            layer_dict = {}
+            for field in layer[1].splitlines():
+                if field == '' or field.strip()[0] == '#':
+                    continue
+                field = field.split('=')
+                field_values = [temp.strip() for temp in field]
+                layer_dict[field_values[0]] = field_values[1]
+            defaults[layer[0]] = layer_dict
+
+    defaults['Ethernet']['src'] = read_MAC('eth0')
+    defaults['IP']['src'] = get_ip_addr('eth0')
     return defaults
 
 
-def get_ip_addr(ifname):
+def get_ip_addr(interface):
     """Gets the ip address of an interface.
 
     Args:
@@ -109,8 +125,6 @@ def get_ip_addr(ifname):
     Returns:
         str: IP address of the interface, in standard IP format.
 
-    TODO: Change name of ifname. Plus error checking.
+    TODO: Error checking.
     """
-    ip = netifaces.ifaddresses(ifname)[2][0]['addr']
-    return '.'.join(['%03d' % int(octal) for octal in ip.split('.')])
-
+    return netifaces.ifaddresses(interface)[2][0]['addr']

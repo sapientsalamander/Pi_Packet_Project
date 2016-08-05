@@ -1,4 +1,5 @@
 def add_mult(data, char, step):  # Str
+    print data
     i = step
     data = list(data)
     while i < len(data):
@@ -25,10 +26,7 @@ def pad(data, length, char, end=False):
 
 
 def remove_char(data, char):
-    if type(data) == str:
-        return data.replace(char, '')
-    elif type(data) == list:
-        return [val for val in data if val != char]
+    return data.replace(char, '')
 
 
 def split(data, char):  # Str

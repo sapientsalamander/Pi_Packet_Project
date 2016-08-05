@@ -1,0 +1,30 @@
+Ethernet {
+    dst = b8:27:eb:61:1b:d4
+}
+
+IP {
+    dst = 10.0.24.243
+    ttl = 64
+}
+
+TCP {
+    sport = 4321
+    dport = 4321
+}
+
+UDP {
+    sport = 4321
+    dport = 4321
+}
+
+802.1Q {
+    prio = 0
+    id = 0
+    vlan = 1
+}
+
+Other {
+    delay = 1.0
+    pkt_file = packet.pcap
+}
+
