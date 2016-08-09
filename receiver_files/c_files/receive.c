@@ -11,14 +11,17 @@
  * to initialize the socket. */
 #define PYTHON_SOCKET "/tmp/receive_socket"
 
-/* Filter for any incoming packets, callback is only called on packets
- * that pass it. */
-#define PCAP_FILTER "port 4321"
+/* The size of the buffer that holds incoming packets. */
+#define PCAP_BUFFER_SIZE 2097152
 
 /* These next few declarations are for the Python socket that we will be
  * opening, so we can redirect any incoming packets to the Python UI. */
 static struct sockaddr_un address;
 static int socket_fd;
+
+/* pcap structure used for interfacing with sending side. Handles most of the
+ * backend of packet sniffing for us. */
+pcap_t *handle = NULL;
 
 /* Static error buffer that holds any errors that pcap returns back to us. 
  * Used so that you don't have to declare an error buffer per function. */
@@ -65,7 +68,7 @@ initialize_socket(void)
 
     /* Attempt to connect to the file, and if it failed, keep attempting to
      * connect (in the case that the Python program has not yet started). */
-    const int size_sock = sizeof(struct sockaddr_un);
+    const socklen_t size_sock = sizeof(struct sockaddr_un);
     const struct sockaddr *pointer_sock = (struct sockaddr *) &address;
     while (connect(socket_fd, pointer_sock, size_sock) < 0) {
         printf("connect() failed. Check that the Python program is up.\n");
@@ -76,33 +79,62 @@ initialize_socket(void)
     return 0;
 }
 
+/* Sets a new filter on the pcap_t. For syntax, see the man pages on
+ * pcap-filter, it describes the arguments that the filter can be supplied.
+ * This function can be called while pcap is listening for packets, but
+ * any packets that were received and not yet processed may or may not be
+ * dropped. */
+static int
+pcap_set_filter(const char *filter)
+{
+    /* Structure used for compiling a filter into something pcap can use. */
+    struct bpf_program fp;
+
+    if (pcap_compile(handle, &fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1) {
+        fprintf(stderr, "pcap_compile() failed.\n");
+        fprintf(stderr, "pcap error is %s.\n", pcap_geterr(handle));
+        return -1;
+    }
+
+    if (pcap_setfilter(handle, &fp) == -1) {
+        fprintf(stderr, "pcap_setfilter() failed.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 /* Initialize the pcap interface we will use to capture packets. When that's
  * finished, we run pcap_loop, which takes over this thread and calls the
  * handler that we specified whenever it sniffs any incoming packet. */
 static int
 run_pcap(void)
 {
-    pcap_t *descr;
-    
-    struct bpf_program fp;
-    bpf_u_int32 p_mask;
-    bpf_u_int32 p_net;
-    
-    pcap_lookupnet(DEVICE, &p_net, &p_mask, errbuf);
-    descr = pcap_open_live(DEVICE, BUFSIZ, 1, -1, errbuf);
-    
-    if (descr == NULL) {
-        fprintf(stderr, "pcap_open_live() failed to open: %s.\n", errbuf);
+    handle = pcap_create(DEVICE, errbuf);
+
+    if (handle == NULL) {
+        fprintf(stderr, "pcap failed to create handler: %s.\n", errbuf);
         return -1;
     }
-    
-    if (pcap_compile(descr, &fp, PCAP_FILTER, 0, p_net) == -1) {
-        fprintf(stderr, "pcap_compile() failed.\n");
+
+    if (pcap_set_buffer_size(handle, PCAP_BUFFER_SIZE)) {
+        fprintf(stderr, "pcap_set_buffer_size() failed to expand buffer.\n");
         return -1;
     }
-    
-    if (pcap_setfilter(descr, &fp) == -1) {
-        fprintf(stderr, "pcap_setfilter() failed.\n");
+
+    if (pcap_set_promisc(handle, 1)) {
+        fprintf(stderr, "pcap_set_promisc() couldn't set promiscuous mode.\n");
+        return -1;
+    }
+
+    if (pcap_activate(handle)) {
+        fprintf(stderr, "pcap couldn't intialize handler.\n");
+        fprintf(stderr, "pcap error is %s.\n", pcap_geterr(handle));
+        return -1;
+    }
+
+    if (pcap_set_filter("port 4321")) {
+        fprintf(stderr, "Error in pcap_set_filter helper function.\n");
         return -1;
     }
 
@@ -113,7 +145,7 @@ run_pcap(void)
      * a packet, and then it starts to listen for packets, which is blocking,
      * i.e. takes over this thread, so in theory should never reach end of
      * the function. */
-    pcap_loop(descr, -1, callback, NULL);
+    pcap_loop(handle, -1, callback, NULL);
 
     return 0; /* Should never reach here. */
 }
