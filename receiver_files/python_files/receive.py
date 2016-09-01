@@ -120,13 +120,13 @@ def update_statistics_loop():
     the C side will tell us how many packets it has received.
     TODO: Update the info above as soon as we move to SEASIDE.
     """
-    rx_cur = computations.compute_interface_bytes(INTERFACE, 'rx')
+    rx_cur = computations.read_interface_bytes(INTERFACE, 'rx')
     time_cur = time.time()
     while True:
         rx_prev = rx_cur
         time_prev = time_cur
 
-        rx_cur = computations.compute_interface_bytes(INTERFACE, 'rx')
+        rx_cur = computations.read_interface_bytes(INTERFACE, 'rx')
         time_cur = time.time()
 
         bw_bits_second = conversions.convert_bandwidth_bits_per_second(
@@ -142,7 +142,7 @@ def update_statistics_loop():
 
         screen_output[Screens.Summary.value][1] = bandwidth_output
 
-        avg_cpu_usage, per_core_cpu_usage = computations.compute_cpu_usage()
+        avg_cpu_usage, per_core_cpu_usage = computations.read_cpu_usage()
         screen_output[Screens.CPU.value][0] = \
             'CPU Usage: %4.1f%%' % (avg_cpu_usage)
 
