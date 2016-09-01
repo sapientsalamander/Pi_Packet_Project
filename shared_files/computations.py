@@ -4,8 +4,8 @@ Computations, in our project, are defined as functions retrieve various
 info that are scattered around the system. These can be files located in
 os wide dirs, like /sys/, or from user files, like /home/pi/. These can also
 have a layer of indirection, so we don't have to read the files ourselves,
-but use a library as an interface. As examples, various computations can be
-getting the bandwidth on an interface, cpu usage, MAC address, etc.
+but use a library as an interface. As examples, various computations getthe
+bandwidth on an interface, cpu usage, MAC address, etc.
 
 
 read_cpu_usage: Calculates cpu usage using the psutil library.
@@ -99,7 +99,7 @@ def read_defaults():
     with open('/home/pi/Sender/sender_files/packet_files/config.txt',
               'r') as configure_file:
         defaults_file = configure_file.read()
-        matches = re.findall('^([a-zA-Z0-9_.]*?)\s*\\{\s*(.*?)\s*\\}',
+        matches = re.findall('^[ ]*([\w.]*?)\s*\\{\s*(.*?)\s*\\}',
                              defaults_file, re.MULTILINE | re.DOTALL)
         for layer in matches:
             layer_dict = {}

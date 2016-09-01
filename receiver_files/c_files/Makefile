@@ -8,7 +8,7 @@ WFlags = -Wall -Wextra -Wformat=2 -Wswitch-default -Wcast-align \
     -fno-common -fstrict-aliasing -lm -pedantic -O0 -ggdb3 -pg --coverage
 
 all:
-		$(CC) receive.c -o receive $(STD) $(Libraries) $(WFlags)
+	$(CC) receive.c -o receive $(STD) $(Libraries) $(WFlags)
 
 clean:
-		rm *.o receive
+	rm *.o receive

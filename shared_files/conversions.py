@@ -1,6 +1,6 @@
 """Functions for converting various things from one form to another.
 
-Most functions convert the parameter to a different type. If not, they convert
+These functions convert the parameter to a different type or convert
 units.
 
 convert_packet_int_array: Converts a Scapy packet to an array of ints.

@@ -19,8 +19,10 @@ import fcntl
 import sys
 import os
 import socket
+import struct
 import time
 import thread
+import threading
 from enum import Enum
 
 import scapy.all as scapy
@@ -30,6 +32,8 @@ import Adafruit_CharLCD as LCD
 from shared_files import multithreaded_lcd as thread_lcd
 from shared_files import computations
 from shared_files import conversions
+from shared_files import SEASIDE
+from shared_files.SEASIDE import SEASIDE_FLAGS
 
 # The file used to initialize the socket to communicate with C program.
 SOCKET_ADDR = '/tmp/receive_socket'
@@ -56,14 +60,6 @@ screen_output = [['', ''] for x in xrange(len(Screens))]
 # An LCD lock, to ensure that the two threads, one for port listening and
 # one for bandwidth measuring, do not interfere when updating the LCD.
 lcd_lock = thread.allocate_lock()
-
-
-# TODO Request bandwidth from SEASIDE
-
-# TODO: Currently, this global variable is only used for calculating
-# bandwidth. We should implement bandwidth calculation some other way
-# (perhaps using the SEASIDE struct), and remove this global variable.
-packet = scapy.Ether()
 
 
 def display_loop():
@@ -116,33 +112,19 @@ def update_packet_info(packet, number_packets_received):
 
 def update_statistics_loop():
     """Gets cpu usage and bandwidth and displays it on the LCD.
-
-    Currently, the bandwidth calculation is done by reading from
-    /sys/class/net/[interface]. However, we are not able to get super
-    accurate results from it. We currently have plans to move it so that
-    the C side will tell us how many packets it has received.
-    TODO: Update the info above as soon as we move to SEASIDE.
     """
-    rx_cur = computations.read_interface_bytes(INTERFACE, 'rx')
-    time_cur = time.time()
+    global c_socket_lock
     while True:
-        rx_prev = rx_cur
-        time_prev = time_cur
-
-        #  Switch bandwidth calculation to SEASIDE
-        rx_cur = computations.read_interface_bytes(INTERFACE, 'rx')
-        time_cur = time.time()
-
-        bw_bits_second = conversions.convert_bandwidth_bits_per_second(
-            rx_cur - rx_prev, time_cur - time_prev, len(packet), -14)
-
-        bandwidth, bw_unit = conversions.convert_bandwidth_units(
-            bw_bits_second)
+        d_bytes = SEASIDE.request_SEASIDE(c_socket, c_socket_lock,
+                                          SEASIDE_FLAGS.GET_BANDWIDTH.value)
+        print repr(d_bytes)
+        d_bytes = struct.unpack('=Q', d_bytes)
+        d_bytes = d_bytes[0]
+        bw, bw_unit = conversions.convert_bandwidth_units(d_bytes)
+        bandwidth_output = 'Bw:%5.1f %s' % (bw, bw_unit)
 
         thread_lcd.lock_and_display_bandwidth_LED(
-            lcd, lcd_lock, bandwidth, bw_unit)
-
-        bandwidth_output = 'Bw:%5.1f %s' % (bandwidth, bw_unit)
+            lcd, lcd_lock, bw, bw_unit)
 
         screen_output[Screens.Summary.value][1] = bandwidth_output
 
@@ -162,47 +144,24 @@ def listen_packets_loop():
     the display to show information about packet.
     """
     global packet
-    # If file descriptor already exists from previous session, we delete it.
-    try:
-        os.unlink(SOCKET_ADDR)
-    except OSError:
-        if os.path.exists(SOCKET_ADDR):
-            raise
-
-    # Create the actual socket at the defined address.
-    c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    c_socket.bind(SOCKET_ADDR)
-    print 'Successfully created socket'
-
-    print 'Waiting for C program to connect'
-    # Listen for the C program to connect
-    c_socket.listen(1)
-    connection, client_address = c_socket.accept()
-    print 'C program connected'
-
-    number_packets_received = 0
+    global c_socket
 
     print 'Listening for packets...'
 
     while True:
         # Receive any packet that the C side has sent over.
-        c_input = connection.recv(2048)
-        if c_input == -1:
-            print 'Error with SEASIDE socket.'
-            break
+        print 'Sending request'
+        c_packet = SEASIDE.request_SEASIDE(c_socket, c_socket_lock, SEASIDE_FLAGS.GET_PACKET.value)
 
-        elif c_input == '':
-            print 'Error: Cannot parse empty input.'
-            break
+        if c_packet != '':
+            # Parse packet with scapy so we can pull it apart easier.
+            packet = scapy.Ether(c_packet)
+    
+            num_packets_received = SEASIDE.request_SEASIDE(c_socket, c_socket_lock, SEASIDE_FLAGS.NUM_PACKETS.value)
+            num_packets_received = struct.unpack('=I', num_packets_received)
+            update_packet_info(packet, num_packets_received)
 
-        number_packets_received += 1
-
-        print 'Received packet [%d]' % (number_packets_received)
-
-        # Parse packet with scapy so we can pull it apart easier.
-        packet = scapy.Ether(c_input)
-
-        update_packet_info(packet, number_packets_received)
+        time.sleep(5)
 
 
 def input_loop():
@@ -229,7 +188,7 @@ if __name__ == '__main__':
     # it. If it is already locked, then another instance is running, and this
     # instance of the programs exits. If not, it successfully locks it and
     # continues running.
-    pid_file = '/tmp/send.pid'
+    pid_file = '/tmp/receive.pid'
     fp = open(pid_file, 'w')
     try:
         fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -237,6 +196,22 @@ if __name__ == '__main__':
         print 'An instance of this program is already running'
         sys.exit(0)
     # End of lock code.
+
+    global c_socket
+    c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    SOCKET_ADDR = '/tmp/receive_socket'
+    while True:
+        try:
+            c_socket.connect(SOCKET_ADDR)
+            break
+        except:
+            time.sleep(1)
+            print 'Trying to connect...'
+
+    # A lock to ensure that only one thread may use the c_socket to communicate
+    # using SEASIDE at once.
+    global c_socket_lock
+    c_socket_lock = threading.RLock()
 
     # Initializes LCD and turn off LED.
     lcd = LCD.Adafruit_CharLCDPlate()

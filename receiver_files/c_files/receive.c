@@ -1,82 +1,239 @@
+#include <arpa/inet.h>
+#include <errno.h>
+#include <sys/file.h>
+#include <math.h>
+#include <netinet/tcp.h>
 #include <pcap.h>
 #include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
+
+/* WARNING: Before you change anything too big, be sure to read through
+ * all the WARNING comments, as they generally lay out some of the unintended
+ * consequences that could happen if you change something. */
+
+#define MAX(A,B) (A) < (B) ? (B) : (A)
+#define MIN(A,B) (A) < (B) ? (A) : (B)
 
 /* The device that we will be listening to. */
 #define DEVICE "eth0"
 
-/* The file that the Python side will create, and the one we will connect
- * to initialize the socket. */
-#define PYTHON_SOCKET "/tmp/receive_socket"
+/* The file that we will create in order to initialize a socket between this
+ * program and the UI program(s). */
+#define UI_SOCKET "/tmp/receive_socket"
+
+/* The singleton file that we will attempt to create and lock. This is so
+ * that only one instance of this program can be run. If another instance
+ * attempts to run, the lock will fail, and it'll quietly exit. */
+#define SINGLETON_FILE "/tmp/receive_singleton"
+
+/* Filter that pcap applies to any incoming packets. */
+#define PCAP_FILTER "port 4321"
 
 /* The size of the buffer that holds incoming packets. */
 #define PCAP_BUFFER_SIZE 2097152
 
-/* These next few declarations are for the Python socket that we will be
- * opening, so we can redirect any incoming packets to the Python UI. */
+/* The buffer that will be used to hold the packet that the UI sends over,
+ * must be big enough to gurantee that it does not overflow (obviously). */
+#define UI_BUFFER_SIZE 2048
+
+#define NANOSECONDS_PER_SECOND 1000000000
+
+#define SEASIDE_PACKET          0
+#define SEASIDE_START           1
+#define SEASIDE_STOP            2
+#define SEASIDE_SLEEP_TIME      3
+#define SEASIDE_NUM_PACKETS     4
+#define SEASIDE_SINGLE_PACKET   5
+#define SEASIDE_GET_PACKET      6
+#define SEASIDE_GET_BANDWIDTH   7
+#define SEASIDE_GET_PACKET_SIZE 8
+#define SEASIDE_START_SEQUENCE  9
+#define SEASIDE_STOP_SEQUENCE   10
+#define SEASIDE_RESPONSE        11
+
+/* Struct to hold the info that we receive from the UI side. The type
+ * refers to the type of data that it holds (see above defines), and the size
+ * member is the size of the data that it receives. */
+typedef struct {
+    uint8_t type;
+    uint16_t size;
+    uint8_t *data;
+} __attribute__((packed)) SEASIDE;
+
+/* Singleton file, used to ensure only once instance of this program
+ * is running at a time. */
+static int singleton_file;
+
+/* These next few declarations are for the UI socket that we will be
+ * opening, so we can redirect any incoming packets to the UI. */
 static struct sockaddr_un address;
 static int socket_fd;
 
-/* pcap structure used for interfacing with sending side. Handles most of the
- * backend of packet sniffing for us. */
-pcap_t *handle = NULL;
+/* The main server socket, located at UI_SOCKET. Other UI programs will
+ * attempt to connect to this socket. */
+static struct sockaddr *pointer_sock;
+static socklen_t size_sock;
 
-/* Static error buffer that holds any errors that pcap returns back to us. 
+/* A thread dedicated solely to sending packets onto the wire. */
+static pthread_t ui_listen_thread;
+
+/* Static error buffer that holds any errors that pcap returns back to us.
  * Used so that you don't have to declare an error buffer per function. */
 static char errbuf[PCAP_ERRBUF_SIZE];
+static pcap_t *handle;
 
-/* Function that is invoked whenever a packet is received. Takes in a
- * struct pcap_pkthdr, which contains information about the size of
- * the packet. It then sends the received packet to the Python socket
- * that we opened earlier. */
+/* packet and packet length, to send to the receiving Pi. */
+static uint8_t packet[UI_BUFFER_SIZE] = {'\0'};
+static size_t packet_len = 0;
+
+/* Mutex to ensure no two threads attempt to modify packet or packet_len
+ * at the same time. */
+static pthread_mutex_t packet_mutex;
+
+/* Variable to hold the bandwidth calculation (bits/s). */
+static unsigned long long bandwidth = 0;
+
+/* Variable to hold how many packets we have received. Used for diagnostic
+ * purposes on the UI side. */
+static volatile uint32_t num_packets_received = 0;
+
+/* Timespecs for received packets. Used to calculate bandwidth. */
+static struct timespec cur_time;
+static struct timespec prev_time;
+static struct timespec elapsed_time;
+
+/* Helper function to add two timespecs together. */
+static struct timespec
+timespec_add(const struct timespec *t1, const struct timespec *t2)
+{
+    struct timespec result;
+
+    result.tv_sec = t1->tv_sec + t2->tv_sec;
+    result.tv_nsec = t1->tv_nsec + t2->tv_nsec;
+
+    while (result.tv_nsec >= NANOSECONDS_PER_SECOND) {
+        result.tv_nsec -= NANOSECONDS_PER_SECOND;
+        result.tv_sec++;
+    }
+
+    return result;
+}
+
+/* Helper function to subtract two timespecs together. */
+static struct timespec
+timespec_sub(const struct timespec *t1, const struct timespec *t2)
+{
+    struct timespec result = *t1;
+
+    /* TODO: While portable for a long, result.tv_nsec might overflow if
+     * a weird datatype. */
+    if (t1->tv_nsec < t2->tv_nsec) {
+        result.tv_sec--;
+        result.tv_nsec += NANOSECONDS_PER_SECOND;
+    }
+
+    result.tv_sec -= t2->tv_sec;
+    result.tv_nsec -= t2->tv_nsec;
+
+    return result;
+}
+
+/* Every time a packet is received, pcap calls this function. We use it to
+ * store relevant information for later retrieval from the ui threads. */
+/* TODO: Handle situations where we only receive part of a packet. */
 void
 callback(u_char *user,
          const struct pcap_pkthdr *pkthdr,
-         const u_char *packet)
+         const u_char *packet_recv)
 {
-    static int count = 0; /* Total number of packets received. */
-    /* Print general information about this packet. */
-    printf("User [%s], packet number [%d], size of portion [%d], "
-           "size of packet [%d].\n", 
-           user, ++count, pkthdr->caplen, pkthdr->len);
+    clock_gettime(CLOCK_MONOTONIC, &cur_time);
 
-    /* Redirect the packet to the Python socket. */
-    int n = send(socket_fd, packet, pkthdr->caplen, 0);
-    if (n < 0) {
-        fprintf(stderr, "Error writing to socket.\n");
-    }
+    pthread_mutex_lock(&packet_mutex);
+
+    num_packets_received++;
+
+    /* Stores the received packet for later diagnostic use. */
+    memcpy(packet, packet_recv, pkthdr->caplen);
+    packet_len = pkthdr->caplen;
+
+    /* Calculates the elapsed time, and approximates the bandwidth from the
+     * time between received packets. */
+    elapsed_time = timespec_sub(&cur_time, &prev_time);
+    double d_time = elapsed_time.tv_sec
+                    + ( (double) elapsed_time.tv_nsec
+                        / NANOSECONDS_PER_SECOND );
+    bandwidth = (packet_len * 8.0) / d_time;
+    printf("Bandwidth: %llu\n", bandwidth);
+
+    pthread_mutex_unlock(&packet_mutex);
+
+    prev_time = cur_time;
 }
 
-/* Initialize the Python socket by attemping to open a file descriptor
- * that has already been created by the Python side. */
+
+/* Initializes the socket that will be used to receive packet info from
+ * the UI program. It binds to the file specified as UI_SOCKET,
+ * and then listens in for any attempted connections. When it hears one,
+ * we assume that it's the UI program, and we continue on our
+ * merry way. */
 static int
 initialize_socket(void)
 {
     /*Initialize the type of socket. */
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd < 0) {
-        fprintf(stderr, "Error opening socket().\n");
+        fprintf(stderr, "socket() failed.\n");
         return -1;
     }
 
     memset(&address, 0, sizeof(struct sockaddr_un)); /* Zero out address. */
 
     address.sun_family = AF_UNIX;
-    strcpy(address.sun_path, PYTHON_SOCKET);
+    strcpy(address.sun_path, UI_SOCKET);
+    unlink(address.sun_path);
 
-    /* Attempt to connect to the file, and if it failed, keep attempting to
-     * connect (in the case that the Python program has not yet started). */
-    const socklen_t size_sock = sizeof(struct sockaddr_un);
-    const struct sockaddr *pointer_sock = (struct sockaddr *) &address;
-    while (connect(socket_fd, pointer_sock, size_sock) < 0) {
-        printf("connect() failed. Check that the Python program is up.\n");
+    /* Attempt to bind to the file, and then waits for the UI program
+     * to connect. */
+    size_sock = sizeof(struct sockaddr_un);
+    pointer_sock = (struct sockaddr *) &address;
+    if (bind(socket_fd, pointer_sock, size_sock) < 0) {
+        fprintf(stderr, "bind() failed.\n");
         sleep(1);
+        fprintf(stderr, "Retrying...\n");
     }
-    printf("Successfully connected to Python socket.\n");
+
+    if (listen(socket_fd, 8) < 0) {
+        fprintf(stderr, "listen() failed.\n");
+        return -1;
+    }
 
     return 0;
+}
+
+/* Sends a response SEASIDE struct through an arbitrary file descriptor.
+ * First sends the header SEASIDE struct (type and size), and then sends the
+ * actual data. */
+void
+send_response(int ui_fd, void *data, uint16_t len)
+{
+    char buf[3];
+
+    buf[0] = SEASIDE_RESPONSE;
+    memcpy(buf + 1, &len, 2);
+
+    if (send(ui_fd, buf, 3, MSG_MORE) < 0) {
+        fprintf(stderr, "Error with send to ui_fd\n");
+    }
+    if (send(ui_fd, data, len, 0) < 0) {
+        fprintf(stderr, "Error with send to ui_fd\n");
+    }
 }
 
 /* Sets a new filter on the pcap_t. For syntax, see the man pages on
@@ -104,11 +261,10 @@ pcap_set_filter(const char *filter)
     return 0;
 }
 
-/* Initialize the pcap interface we will use to capture packets. When that's
- * finished, we run pcap_loop, which takes over this thread and calls the
- * handler that we specified whenever it sniffs any incoming packet. */
+/* Opens up an ethernet socket from pcap, to be used when sending packets
+ * over the wire. */
 static int
-run_pcap(void)
+initialize_pcap(void)
 {
     handle = pcap_create(DEVICE, errbuf);
 
@@ -133,7 +289,7 @@ run_pcap(void)
         return -1;
     }
 
-    if (pcap_set_filter("port 4321")) {
+    if (pcap_set_filter(PCAP_FILTER)) {
         fprintf(stderr, "Error in pcap_set_filter helper function.\n");
         return -1;
     }
@@ -141,29 +297,174 @@ run_pcap(void)
     printf("Successfully initialized pcap.\n");
     printf("Waiting for packets...\n");
 
-    /* pcap function, where we give it a function to call whenever it receives
-     * a packet, and then it starts to listen for packets, which is blocking,
-     * i.e. takes over this thread, so in theory should never reach end of
-     * the function. */
-    pcap_loop(handle, -1, callback, NULL);
-
-    return 0; /* Should never reach here. */
+    return 0;
 }
 
-/* Initialize the Python socket, and runs pcap. Since pcap takes over this
- * thread, it will never reach the end (barring any errors). */
+/* Listens to the Unix socket for the packet that we should be sending to the
+ * receiving Pi. When it gathers all the information for it, such as
+ * destination, data, speed, etc. it starts sending the packet. */
+static void *
+listen_packet_info(void *ui_fd_temp)
+{
+    /* Temporary variables to store any received data, before moving it
+     * to the global scope. */
+    uint8_t request[UI_BUFFER_SIZE];
+    ssize_t request_len;
+
+    int ui_fd = *(int *) ui_fd_temp;
+    while (1) {
+        printf("Waiting for request\n");
+        request_len = recv(ui_fd, request, UI_BUFFER_SIZE, 0);
+
+        /* EOF signal received, will close socket in orderly manner. */
+        if (request_len == 0) {
+            close(ui_fd);
+            return (void *) NULL;
+        }
+
+        SEASIDE seaside_header;
+
+        /* WARNING: If you ever change the layout or order of the SEASIDE
+         * struct, be sure to change this copying bit, too. */
+        memcpy(&seaside_header.type, request, sizeof(uint8_t));
+        memcpy(&seaside_header.size, (request + 1), sizeof(uint16_t));
+        seaside_header.data = request + 3;
+
+        printf("Type: [%d], size: [%d]\n",
+            seaside_header.type, seaside_header.size);
+        for (int i = 0; i < request_len; ++i) {
+            printf("%i ", request[i]);
+        }
+        printf("\n");
+
+        pthread_mutex_lock(&packet_mutex);
+
+        switch (seaside_header.type) {
+
+        /* Not supported on the receiving side. */
+        case SEASIDE_PACKET:
+            break;
+
+        /* Not supported on the receiving side. */
+        case SEASIDE_START:
+            break;
+
+        /* Not supported on the receiving side. */
+        case SEASIDE_STOP:
+            break;
+
+        /* Not supported on the receiving side. */
+        case SEASIDE_SLEEP_TIME:
+            break;
+
+        /* Return the number of received packets. */
+        case SEASIDE_NUM_PACKETS:
+            send_response(ui_fd, &num_packets_received,
+                          sizeof(num_packets_received));
+            break;
+
+        /* Not supported on the receiving side. */
+        case SEASIDE_SINGLE_PACKET:
+            break;
+
+        /* Return the current packet. */
+        case SEASIDE_GET_PACKET:
+            send_response(ui_fd, packet, packet_len);
+            break;
+
+        /* Return the bandwidth calculated. */
+        case SEASIDE_GET_BANDWIDTH:
+            send_response(ui_fd, &bandwidth, sizeof(bandwidth));
+            break;
+
+        /* Return the size of the current packet. */
+        case SEASIDE_GET_PACKET_SIZE:
+            send_response(ui_fd, &packet_len, sizeof(packet_len));
+            printf("Send packet size\n");
+            break;
+
+        default:
+            fprintf(stderr, "Invalid SEASIDE flag received.\n");
+            break;
+        }
+
+        pthread_mutex_unlock(&packet_mutex);
+    }
+    fprintf(stderr, "Error in listen_packet_info().\n");
+
+    return NULL;
+}
+
+/* Listens at the specified socket descriptor for any incoming connections.
+ * When it encounters one, it spawns a new thread to handle the connection,
+ * and continues listening for any more connections. */
+static void *
+accept_connections(void *unused)
+{
+    int ui_fd;
+    while (1) {
+        if ((ui_fd = accept(socket_fd, pointer_sock, &size_sock)) < 0) {
+            fprintf(stderr, "accept() failed.\n");
+            perror(NULL);
+            return unused;
+        }
+
+        pthread_t ui_thread;
+        pthread_create(&ui_thread, NULL, listen_packet_info, (void *) &ui_fd);
+    }
+
+    return unused;
+}
+
+/* A singleton file, used to ensure that only one instance of this program
+ * is running. It attempts to lock a certain file, specified by SINGLETON_FILE,
+ * and if not successful, because another instance already locked it, returns
+ * -1. */
+static int
+lock_single_instance_file(void)
+{
+    singleton_file = open(SINGLETON_FILE, O_CREAT | O_RDWR, 0666);
+    if (flock(singleton_file, LOCK_EX | LOCK_NB)) {
+        if (errno == EWOULDBLOCK) {
+            fprintf(stderr, "The singleton file is already created. It's "
+                    "assumed an instance of this program is already running."
+                    " Exiting.\n");
+            return -1;
+            
+        }
+    }
+    return 0;
+}
+
+/* Initializes pcap and the socket, and then sends the packet that was
+ * received from the UI program. */
 int
 main(void)
 {
+    if (lock_single_instance_file()) {
+        printf("Error in lock_single_instance_file().\n");
+        return -1;
+    }
+
     if (initialize_socket()) {
-        fprintf(stderr, "Error in initialize_socket().\n");
+        printf("Error in initialize_socket().\n");
         return -1;
     }
 
-    if (run_pcap()) {
-        fprintf(stderr, "Error in run_pcap().\n");
+    if (initialize_pcap()) {
+        printf("Error in initialize_pcap().\n");
         return -1;
     }
 
-    return 0;
+    printf("Successfully initialized everything.\n");
+
+    pthread_create(&ui_listen_thread, NULL, accept_connections, NULL);
+
+    /* Initializes the time, for bandwidth calculations. */
+    clock_gettime(CLOCK_MONOTONIC, &prev_time);
+    pcap_loop(handle, -1, callback, NULL);
+
+    close(socket_fd);
+    pcap_close(handle);
 }
+

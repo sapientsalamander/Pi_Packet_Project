@@ -109,6 +109,22 @@ static volatile unsigned long long num_packets_sent = 0;
 static uint8_t sleep_time_seconds = 1;
 static int32_t sleep_time_useconds = 0;
 
+void
+send_response(int ui_fd, void *data, uint8_t len)
+{
+    char buf[3];
+
+    buf[0] = 11;
+    memcpy(buf + 1, &len, 2);
+
+    if (send(ui_fd, buf, 3, MSG_MORE) < 0) {
+        fprintf(stderr, "Error with send to ui_fd\n");
+    }
+    if (send(ui_fd, data, len, 0) < 0) {
+        fprintf(stderr, "Error with send to ui_fd\n");
+    }
+}
+
 /* Initializes the socket that will be used to receive packet info from
  * the UI program. It binds to the file specified as UI_SOCKET,
  * and then listens in for any attempted connections. When it hears one,
@@ -197,7 +213,7 @@ timespec_sub(const struct timespec *t1, const struct timespec *t2)
 {
     struct timespec result = *t1;
 
-    /* TODO: While portable for a long, t1->nsec might overflow if
+    /* TODO: While portable for a long, result.tv_nsec might overflow if
      * a weird datatype. */
     if (t1->tv_nsec < t2->tv_nsec) {
         result.tv_sec--;
@@ -221,7 +237,8 @@ send_packet(void)
  * initialize_pcap, and displays logging information. */
 /* WARNING: Before you change anything the packet, sleep time, etc.
  * be sure to kill this thread, make any changes you want, and then
- * start the thread back up, to ensure that there are no race conditions. */
+ * start the thread back up, to ensure that there are no race conditions.
+ * Take a look at listen_packet_info for an example. */
 static void *
 send_packets(void *unused)
 {
@@ -285,14 +302,14 @@ send_packets(void *unused)
         /* Bandwidth calculation in bits per second. */
         clock_gettime(CLOCK_MONOTONIC, &cur_time);
         elapsed_time = timespec_sub(&cur_time, &beg_time);
+
         double d_time = elapsed_time.tv_sec
-                        + (((double) elapsed_time.tv_nsec)
-                           / NANOSECONDS_PER_SECOND);
+                        + ( (double) elapsed_time.tv_nsec
+                            / NANOSECONDS_PER_SECOND );
+
         pthread_mutex_lock(&bandwidth_mutex);
         bandwidth = (packet_len * 8.0) / d_time;
         pthread_mutex_unlock(&bandwidth_mutex);
-        printf("%f\n", d_time);
-        printf("%lld\n", bandwidth);
     } while (spam_packets &&
             (ret = send_packet()) >= 0);
 
@@ -431,25 +448,19 @@ listen_packet_info(void *ui_fd_temp)
 
         /* Return the current packet. */
         case SEASIDE_GET_PACKET:
-            if (send(ui_fd, packet, packet_len, 0) < 0) {
-                fprintf(stderr, "Error with send to ui_fd\n");
-            }
+            send_response(ui_fd, packet, packet_len);
             break;
 
         /* Return the bandwidth calculated. */
         case SEASIDE_GET_BANDWIDTH:
             pthread_mutex_lock(&bandwidth_mutex);
-            if (send(ui_fd, &bandwidth, sizeof(bandwidth), 0) < 0) {
-                fprintf(stderr, "Error with send to ui_fd\n");
-            }
+            send_response(ui_fd, &bandwidth, sizeof(bandwidth));
             pthread_mutex_unlock(&bandwidth_mutex);
             break;
 
         /* Return the size of the current packet. */
         case SEASIDE_GET_PACKET_SIZE:
-            if (send(ui_fd, &packet_len, sizeof(packet_len), 0) < 0) {
-                fprintf(stderr, "Error with send to ui_fd\n");
-            }
+            send_response(ui_fd, &packet_len, sizeof(packet_len));
             printf("Send packet size\n");
             break;
 
@@ -484,6 +495,9 @@ listen_packet_info(void *ui_fd_temp)
     return NULL;
 }
 
+/* Listens at the specified socket descriptor for any incoming connections.
+ * When it encounters one, it spawns a new thread to handle the connection,
+ * and continues listening for any more connections. */
 static int
 accept_connections(void)
 {
@@ -501,6 +515,10 @@ accept_connections(void)
     return -1;
 }
 
+/* A singleton file, used to ensure that only one instance of this program
+ * is running. It attempts to lock a certain file, specified by SINGLETON_FILE,
+ * and if not successful, because another instance already locked it, returns
+ * -1. */
 static int
 lock_single_instance_file(void)
 {

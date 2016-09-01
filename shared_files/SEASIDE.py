@@ -1,3 +1,16 @@
+"""The Python side of SEASIDE communication.
+
+Contains the enum of SEASIDE flags, including unimplemented ones, as 
+well as two functions for sending SEASIDE communications. One function sends
+without expecting a response and is used to send instructions to the C-side.
+The other waits for a response and is used to request statistical information
+such as bandwidth usage.
+
+SEASIDE_FLAGS: The enum of SEASIDE flags.
+send_SEASIDE: sends a SEASIDE message without waiting for a response.
+request_SEASIDE: sends a SEASIDE message and returns the C-side's response.
+"""
+
 import conversions
 import struct
 from enum import Enum
@@ -14,12 +27,13 @@ def send_SEASIDE(socket, socket_lock, SEASIDE_flag, data=None):
 
     Converts the packet and the int array of data (including flag and size
     information) to a byte array, and then sends it through the
-    provided socket.
+    provided socket. The header consists of a one-byte flag and two bytes
+    indicating the size of the data. Following the header is the data, if any.
 
     Args:
         socket (socket object): the socket to send the data to.
 
-        socket_lock (lock object): the lock associated with the socket, for
+        socket_lock (RLock object): the lock associated with the socket, for
                                    multithreading safety.
 
         SEASIDE_flag (int): indicator for the type of data to be sent:
@@ -59,6 +73,9 @@ def request_SEASIDE(socket, socket_lock, SEASIDE_flag):
     Args:
         socket (socket object): the socket to send the data to.
 
+        socket_lock (RLock object): the lock associated with the socket, for
+                                   multithreading safety.
+
         SEASIDE_flag: indicator for the type of request. Request flags are:
             6  - Get Packet. Requests the currently buffered packet from the
                  C-side.
@@ -71,7 +88,16 @@ def request_SEASIDE(socket, socket_lock, SEASIDE_flag):
 
     """
     SEASIDE_header = struct.pack('=BH', SEASIDE_flag, 0)
+    data = ''
     with socket_lock:
         socket.send(SEASIDE_header)
-        data = socket.recv(4096)
-    return data
+        while True:
+            data += (socket.recv(4096))
+            print repr(data), len(data)
+            if len(data) < 3:
+                continue
+            print repr(data), len(data), struct.unpack('=H', data[1:3])[0] + 3
+            if len(data) >= struct.unpack('=H', data[1:3])[0] + 3:
+                break
+    print repr(data)
+    return data[3:]

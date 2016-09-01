@@ -32,18 +32,25 @@
                 <br>
                 <div class="row">
                     <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-                        <select id="pcap_files" size="10" style="min-width:150px;">
-                        </select>
+                        <h4>Load From Server...</h4>
+                        <div class="card card-block" style="display:inline-block;">
+                            <select id="pcap_files" size="10" style="min-width:150px;">
+                            </select>
+                            <br>
+                            <br>
+                            <button id="load-file-from-server" class="btn btn-primary">Load Selected File</button>
+                        </div>
                     </div>
                 </div>
                 <br>
                 <div class="row">
                     <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
-                        <button id="load-file-from-server" class="btn btn-primary">Load Selected File</button>
-                        <br>
-                        <br>
-                        <br>
-                        <button id="load-file-from-user" class="btn btn-primary">Load From File System...</button>
+                        <h4>Load From File System...</h4>
+                        <div class="card card-block" style="display:inline-block;">
+                            <input type="file">
+                            <br>
+                            <button id="load-file-from-user" class="btn btn-primary">Load Selected File</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -272,12 +272,22 @@ class PacketServer(object):
         packet = conversions.convert_packet_int_array(packet)
         SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
 
+    @cherrypy.expose
+    def upload_pcap_file(self, filename):
+        print filename
+
         # SIDE-EFFECT REQUESTS END HERE
 
 if __name__ == '__main__':
     os.chdir('sender_files/website/')
     c_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    c_socket.connect('/tmp/send_socket')
+    while True:
+        try:
+            c_socket.connect('/tmp/send_socket')
+            break
+        except:
+            time.sleep(1)
+            print 'Trying to connect...'
     # On Startup
     current_dir = os.path.dirname(os.path.abspath(__file__)) + os.path.sep
     config = {

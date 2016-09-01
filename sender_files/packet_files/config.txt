@@ -1,3 +1,13 @@
+# Protocols are named using their Scapy name and separated by curly braces.
+# Fields are named using their Scapy name and separated by newlines. Blank 
+# lines or lines starting with '#' will be ignored. Enter all fields in their
+# standard format without leading zeros, and if adding new protocols, make sure
+# proper sanitization routines and LCD format stringsare included for them in 
+# sender_files/python_files/dictionaries.py. The 'Other' field contains
+# information not directly related to a protocol, like delay between packets
+# and the pcap file to load a packet from.
+
+
 Ethernet {
     dst = b8:27:eb:61:1b:d4
 }
@@ -27,4 +37,3 @@ Other {
     delay = 1.0
     pkt_file = packet.pcap
 }
-

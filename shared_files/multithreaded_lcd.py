@@ -1,6 +1,6 @@
 """Functions to safely use an LCD screen with multiple threads.
 
-The functions are mostly wrappers for the LCD_Input_Wrapper and
+These functions are mostly wrappers for the LCD_Input_Wrapper and
 Adafruit_CharLCDPlate functions used with a multithreading lock.
 """
 import time
@@ -18,7 +18,7 @@ def lock_and_display_bandwidth_LED(lcd, lcd_lock, bandwidth, bw_unit):
     Args:
         lcd (LCD_Input_Wrapper object): The LCD screen to use.
 
-        lcd_lock (RLock or lock): Lock associated with the LCD screen.
+        lcd_lock (RLock object): Lock associated with the LCD screen.
 
         bandwidth (int): The current bandwidth usage. Used to differentiate
                          between very low and no traffic.
@@ -50,7 +50,7 @@ def lock_and_print_lcd_line(lcd, lcd_lock, message, line):
     Args:
         lcd (LCD_Input_Wrapper object): The LCD screen to use.
 
-        lcd_lock (RLock or lock): Lock associated with the LCD screen.
+        lcd_lock (RLock object): Lock associated with the LCD screen.
     """
     # Pad with spaces, manually clearing the line on LCD.
     message = message.ljust(20)
