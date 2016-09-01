@@ -57,6 +57,9 @@ screen_output = [['', ''] for x in xrange(len(Screens))]
 # one for bandwidth measuring, do not interfere when updating the LCD.
 lcd_lock = thread.allocate_lock()
 
+
+# TODO Request bandwidth from SEASIDE
+
 # TODO: Currently, this global variable is only used for calculating
 # bandwidth. We should implement bandwidth calculation some other way
 # (perhaps using the SEASIDE struct), and remove this global variable.
@@ -126,6 +129,7 @@ def update_statistics_loop():
         rx_prev = rx_cur
         time_prev = time_cur
 
+        #  Switch bandwidth calculation to SEASIDE
         rx_cur = computations.read_interface_bytes(INTERFACE, 'rx')
         time_cur = time.time()
 
