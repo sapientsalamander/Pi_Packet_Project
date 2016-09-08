@@ -51,6 +51,9 @@
 #define SEASIDE_GET_PACKET      6
 #define SEASIDE_GET_BANDWIDTH   7
 #define SEASIDE_GET_PACKET_SIZE 8
+#define SEASIDE_START_SEQUENCE  9
+#define SEASIDE_STOP_SEQUENCE   10
+#define SEASIDE_RESPONSE        11
 
 /* Struct to hold the info that we receive from the UI side. The type
  * refers to the type of data that it holds (see above defines), and the size
@@ -110,7 +113,7 @@ static uint8_t sleep_time_seconds = 1;
 static int32_t sleep_time_useconds = 0;
 
 void
-send_response(int ui_fd, void *data, uint8_t len)
+send_response(int ui_fd, void *data, uint16_t len)
 {
     char buf[3];
 

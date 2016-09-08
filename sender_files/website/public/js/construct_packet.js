@@ -1,13 +1,7 @@
-var layer_fields = {
-    'Raw': ['load'],
-    'UDP': ['sport', 'dport'],
-    'IP': ['src', 'dst', 'ttl'],
-    'Ether': ['src', 'dst'],
-    'Test': ['a', 'b', 'c', 'd', 'e', 'f'],
-};
-
 $(document).ready(function () {
     'use strict';
+
+    var layer_fields = {};
 
     var active_layer = undefined
     var active_layer_index = undefined;
@@ -18,6 +12,44 @@ $(document).ready(function () {
         return incID++;
     }
 
+    $.ajax({
+        type: "POST",
+        url: "get_configurable_layers",
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        success: function (data) {
+            layer_fields = data;
+
+            Object.keys(layer_fields).sort().forEach(function (layer) {
+                var text = $("<a/>", {
+                    href: "#",
+                    html: layer,
+                });
+                var element = $("<li/>", {
+                    class: "packet-layer-select",
+                    html: text,
+                });
+                $("#layers-list").append(element);
+            });
+            $(".packet-layer-select").click(function () {
+                var layer = $(this).children("a").text();
+                var temp_dict = {};
+                temp_dict["layer_type"] = layer;
+                temp_dict["li_id"] = getID();
+                Object.keys(layer_fields[layer]).forEach(function (key) {
+                    temp_dict[key] = layer_fields[layer][key];
+                });
+                layers.push(temp_dict);
+                update_selected_layers(layers);
+            });
+
+        },
+        failure: function (errMsg) {
+            alert(errMsg);
+        }
+    });
+
+
     /* Called every time the selected layer changes, so we have to
      * update the text inputs to reflect the actual fields in a
      * certain layer */
@@ -25,16 +57,16 @@ $(document).ready(function () {
         $("#field-inputs").html("");
 
         /* Makes a new input group for each field. */
-        layer_fields[layer].forEach(function (field) {
+        Object.keys(layer_fields[layer]).forEach(function (key) {
             var label = $("<span/>", {
                 class: "input-group-addon",
-                html: field,
+                html: key,
             });
             var input = $("<input/>", {
                 type: "text",
                 class: "form-control field-input",
-                value: active_layer_index[field],
-            }).attr("data-field-type", field);
+                value: active_layer_index[key],
+            }).attr("data-field-type", key);
             var temp = $("<div/>", {
                 class: "input-group",
                 html: label.add(input),
@@ -59,7 +91,7 @@ $(document).ready(function () {
             var temp = $("<button/>", {
                 class: "btn btn-default packet-layer-selected",
                 html: layer["layer_type"],
-                id: layer["id"],
+                id: layer["li_id"],
             });
             $("#selected-layers").prepend(temp);
         });
@@ -71,7 +103,7 @@ $(document).ready(function () {
                 /* Used for determining which index in the layers list is
                  * tied to the active layer. */
                 active_layer_index = layers.filter(function (val) {
-                    return String(val["id"]) === active_layer;
+                    return String(val["li_id"]) === active_layer;
                 })[0];
 
                 update_textbox_inputs($(this).html());
@@ -85,18 +117,6 @@ $(document).ready(function () {
         });
         $("#" + active_layer).css("background-color", "#ccc");
     }
-
-    $(".packet-layer-select").click(function () {
-        var layer = $(this).children("a").text();
-        var temp_dict = {};
-        temp_dict["layer_type"] = layer;
-        temp_dict["id"] = getID();
-        layer_fields[layer].forEach(function (field) {
-            temp_dict[field] = "";
-        });
-        layers.push(temp_dict);
-        update_selected_layers(layers);
-    });
 
     $("#delete-button").click(function () {
         if (active_layer >= 0) {
@@ -131,7 +151,7 @@ $(document).ready(function () {
         var layers_temp = JSON.parse(JSON.stringify(layers));
 
         layers_temp.forEach(function (entry) {
-            delete entry["id"];
+            delete entry["li_id"];
         });
 
         $.ajax({
@@ -152,7 +172,7 @@ $(document).ready(function () {
         var layers_temp = JSON.parse(JSON.stringify(layers));
 
         layers_temp.forEach(function (entry) {
-            delete entry["id"];
+            delete entry["li_id"];
         });
 
         var filename = $("#filename").val();
@@ -169,6 +189,35 @@ $(document).ready(function () {
                 alert(errMsg);
             }
         });
+    });
+
+    $("#save-file-local").click(function () {
+        var layers_temp = JSON.parse(JSON.stringify(layers));
+
+        layers_temp.forEach(function (entry) {
+            delete entry["li_id"];
+        });
+
+        var filename = $("#filename").val();
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "return_pcap_file?packet_layers=" + JSON.stringify(layers_temp), true);
+        xhr.responseType = "arraybuffer";
+        xhr.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+        xhr.onload = function(e) {
+            if (this.status == 200) {
+                var blob = new Blob([this.response], {type: "text\/plain; charset=x-user-defined"});
+                var downloadUrl = URL.createObjectURL(blob);
+                var a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = filename + ".pcap";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        };
+        xhr.send();
+
     });
 
 });

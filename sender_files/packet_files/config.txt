@@ -10,27 +10,53 @@
 
 Ethernet {
     dst = b8:27:eb:61:1b:d4
+    class = Ether
 }
 
 IP {
     dst = 10.0.24.243
     ttl = 64
+    class = IP
 }
 
 TCP {
     sport = 4321
     dport = 4321
+    class = TCP
 }
 
 UDP {
     sport = 4321
     dport = 4321
+    class = UDP
 }
 
 802.1Q {
     prio = 0
     id = 0
     vlan = 1
+    class = Dot1Q
+}
+
+Raw {
+    load =
+    class = Raw
+}
+
+ICMP {
+    type = 8
+    code = 0
+    class = ICMP
+}
+
+ARP {
+    pdst = 0.0.0.0
+    class = ARP
+}
+
+IPv6 {
+    dst = 0000:0000:0000:0000:0000:0000:0000:0000
+    class = IPv6
 }
 
 Other {

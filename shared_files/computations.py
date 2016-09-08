@@ -67,7 +67,7 @@ def read_pcap_file(fname):
     Returns:
         Packet: The first packet found in the file, as a scapy packet.
     """
-    p = scapy.rdpcap('/home/pi/Sender/sender_files/packet_files/%s' % fname)
+    p = scapy.rdpcap('/home/pi/Receiver/sender_files/packet_files/%s' % fname)
     return p[0]
 
 
@@ -96,7 +96,7 @@ def read_defaults():
         see the other dictionaries in python_files/dictionaries.py.
     """
     defaults = {}
-    with open('/home/pi/Sender/sender_files/packet_files/config.txt',
+    with open('/home/pi/Receiver/sender_files/packet_files/config.txt',
               'r') as configure_file:
         defaults_file = configure_file.read()
         matches = re.findall('^[ ]*([\w.]*?)\s*\\{\s*(.*?)\s*\\}',

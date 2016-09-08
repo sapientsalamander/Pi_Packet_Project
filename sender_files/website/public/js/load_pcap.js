@@ -9,22 +9,12 @@ $(document).ready(function () {
    });
 
     $("#load-file-from-user").click(function () {
-        $.ajax({
-            type: "POST",
-            url: "upload_pcap_file?" + //TODO:,
-            success: function (data) {
-                var filenames = JSON.parse(data);
-                filenames.forEach(function (filename) {
-                    var option = $("<option/>", {
-                        html: filename,
-                    });
-                    $("#pcap_files").append(option);
-                });
-            },
-            failure: function (errMsg) {
-                alert(errMsg);
-            }
-        });
+        var file = $("#input_file")[0].files[0];
+        var form_data = new FormData();
+        form_data.append("file_data", file);
+        var request = new XMLHttpRequest();
+        request.open("POST", "upload_pcap_file");
+        request.send(form_data);
     });
 
     $.ajax({

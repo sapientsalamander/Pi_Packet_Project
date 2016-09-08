@@ -45,10 +45,9 @@
                     <div class="col-xs-2 col-sm-2 col-md-1 col-lg-1">
                         <div class="btn-group">
                             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Add Layer <span class="caret"></span></button>
-                            <ul class="dropdown-menu">
-                                <li class="dropdown-header">Miscellaneous</li>
+                            <ul id="layers-list" class="dropdown-menu">
+                                <!--<li class="dropdown-header">Miscellaneous</li>
                                 <li class="packet-layer-select"><a href="#">Raw</a></li>
-                                <li class="packet-layer-select"><a href="#">Test</a></li>
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Layer 4</li>
                                 <li class="packet-layer-select"><a href="#">UDP</a></li>
@@ -57,7 +56,7 @@
                                 <li class="packet-layer-select"><a href="#">IP</a></li>
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Layer 2</li>
-                                <li class="packet-layer-select"><a href="#">Ether</a></li>
+                                <li class="packet-layer-select"><a href="#">Ethernet</a></li>-->
                             </ul>
                         </div>
                     </div>
@@ -92,7 +91,8 @@
                         <div class="input-group" style="margin:0px;">
                             <input id="filename" type="text" class="form-control" placeholder="Enter a file name...">
                             <span class="input-group-btn">
-                                <button id="save-file" class="btn btn-primary" type="button">Save to pcap file</button>
+                                <button id="save-file" class="btn btn-primary" type="button">Save to server</button>
+                                <button id="save-file-local" class="btn btn-primary" type="button">Save locally</button>
                             </span>
                         </div>
                     </div>

@@ -29,6 +29,8 @@ former called 'page requests' and the latter called 'side-effect requests'.
 TODO: Any functions that deal with taking in input should do sanitization.
 """
 
+
+import copy
 import json
 import os
 import os.path
@@ -36,6 +38,7 @@ import socket
 import string
 import struct
 import sys
+import tempfile
 import threading
 
 import cherrypy
@@ -43,6 +46,7 @@ from scapy.all import *
 
 from shared_files import SEASIDE
 from shared_files import conversions
+from shared_files import computations
 from sender_files.python_files import data_sanitization as ds
 from sender_files.python_files import dictionaries as dicts
 
@@ -65,7 +69,10 @@ def str_to_class(string):
     Returns:
         class: A reference to the class the string names.
     """
-    return reduce(getattr, string.split("."), sys.modules[__name__])
+    print '1:', string
+    print '2:', scapy_class_names[string]
+    print '3:', scapy_class_names[string]['class']
+    return reduce(getattr, [scapy_class_names[string]['class']], sys.modules[__name__])
 
 
 def configure_packet_layers(packet_layers):
@@ -168,6 +175,31 @@ class PacketServer(object):
     # SIDE-EFFECT REQUESTS START HERE
 
     @cherrypy.expose
+    def get_configurable_layers(self):
+        """Reads the packet configuration file and returns the different
+        layers that we support, along with the configurable fields.
+
+        Returns:
+            JSON: Dictionary of layers to their fields and default values.
+                As an example:
+                {
+                    'UDP':
+                    {
+                        'dport': '4321',
+                        'sport': '4321'
+                    },
+
+                    '802.1Q':
+                    {
+                        'vlan': '1',
+                        'id': '0',
+                        'prio': '0'
+                    }
+                }
+        """
+        return json.dumps(defaults)
+
+    @cherrypy.expose
     def packet_config(self, packet_layers):
         """Takes the configured layers and sends it to the C side.
 
@@ -252,6 +284,29 @@ class PacketServer(object):
         wrpcap('pcap_files/' + pcap_filename, packet)
 
     @cherrypy.expose
+    def return_pcap_file(self, packet_layers):
+        """Contructs a packet, makes a pcap file, and returns the contents.
+
+        Takes a bunch of packet layers, and constructs a packet as you would
+        normally. When finished, saves it to a temporary pcap file (doing the
+        best with what we got), read that file, and returns the contents of
+        the file.
+
+        Args:
+            packet_layers (JSON): The packet layers, which will be assembled
+                to a whole packet, and then saved as a pcap file. See
+                configure_packet_layers above for the format of this.
+        """
+        if packet_layers == '[]':
+            return
+        packet = configure_packet_layers(packet_layers)
+        pcap_filename = '/tmp/temp_pcap_file.pcap'
+        wrpcap(pcap_filename, packet)
+        with open(pcap_filename, 'r') as pcap_file:
+            data = pcap_file.read()
+        return data
+
+    @cherrypy.expose
     def get_pcap_filenames(self):
         """Returns the list of pcap filenames stored in pcap_files.
 
@@ -273,8 +328,18 @@ class PacketServer(object):
         SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
 
     @cherrypy.expose
-    def upload_pcap_file(self, filename):
-        print filename
+    def upload_pcap_file(self, file_data):
+        """Takes a pcap file, and sends it to the C side for sending.
+
+        Args:
+            file_data (File): A CherryPy representation of a file.
+        """
+        pcap_file = tempfile.NamedTemporaryFile()
+        pcap_file.write(bytearray(file_data.file.read()))
+        pcap_file.seek(0)
+        packet = rdpcap(pcap_file.name)[0]
+        packet = conversions.convert_packet_int_array(packet)
+        SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
 
         # SIDE-EFFECT REQUESTS END HERE
 
@@ -288,7 +353,18 @@ if __name__ == '__main__':
         except:
             time.sleep(1)
             print 'Trying to connect...'
-    # On Startup
+
+    global defaults
+    global scapy_class_names
+    defaults = computations.read_defaults()
+    scapy_class_names = copy.deepcopy(defaults)
+
+    del defaults['Other']
+    for layer in defaults:
+        defaults[layer].pop('class', None)
+
+    print 'STUFF: ', scapy_class_names
+
     current_dir = os.path.dirname(os.path.abspath(__file__)) + os.path.sep
     config = {
         'global': {
