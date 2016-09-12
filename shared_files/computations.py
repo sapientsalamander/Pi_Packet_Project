@@ -24,6 +24,8 @@ import psutil
 import netifaces
 import scapy.all as scapy
 
+PACKET_DIR = '/home/pi/Pi_Packet_Project/sender_files/packet_files/'
+
 # TODO Remove, unused
 def read_interface_bytes(interface, io):
     """Return the total number of rx_bytes or tx_bytes since startup.
@@ -67,7 +69,7 @@ def read_pcap_file(fname):
     Returns:
         Packet: The first packet found in the file, as a scapy packet.
     """
-    p = scapy.rdpcap('/home/pi/Receiver/sender_files/packet_files/%s' % fname)
+    p = scapy.rdpcap(PACKET_DIR + '%s' % fname)
     return p[0]
 
 
@@ -96,7 +98,7 @@ def read_defaults():
         see the other dictionaries in python_files/dictionaries.py.
     """
     defaults = {}
-    with open('/home/pi/Receiver/sender_files/packet_files/config.txt',
+    with open(PACKET_DIR + 'config.txt',
               'r') as configure_file:
         defaults_file = configure_file.read()
         matches = re.findall('^[ ]*([\w.]*?)\s*\\{\s*(.*?)\s*\\}',

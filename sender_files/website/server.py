@@ -61,7 +61,7 @@ def str_to_class(string):
 
     Basically the same as doing an eval('Some class'), but without the eval.
     Because those are scary. It attempts to look up the name in global space,
-    and returns a reference to the class.
+    and returns a reference to the class, which is also kinda scary.
 
     Args:
         string (str): A string containing the name of a class.
@@ -69,10 +69,8 @@ def str_to_class(string):
     Returns:
         class: A reference to the class the string names.
     """
-    print '1:', string
-    print '2:', scapy_class_names[string]
-    print '3:', scapy_class_names[string]['class']
-    return reduce(getattr, [scapy_class_names[string]['class']], sys.modules[__name__])
+    return reduce(getattr, [scapy_class_names[string]['class']],
+                  sys.modules[__name__])
 
 
 def configure_packet_layers(packet_layers):
@@ -124,9 +122,11 @@ def configure_packet_layers(packet_layers):
             if layer[key] != '' and key != 'layer_type':
                 # Gets the type of the field (int, str), so we can cast it
                 # to its appropriate type.
-                print 'Value: ', layer[key], ' | ', layer_type, ' | ', key
                 try:
-                    sanitized_field = ds.sanitize(layer[key], dicts.SAN_SCAPY[layer_type][key])
+                    sanitized_field = ds.sanitize(
+                        layer[key],
+                        dicts.SAN_SCAPY[layer_type][key]
+                    )
                 except KeyError:
                     sanitized_field = layer[key]
                 setattr(temp_layer, key, sanitized_field)
@@ -321,9 +321,21 @@ class PacketServer(object):
 
     @cherrypy.expose
     def load_pcap_file(self, filename):
+        """Takes a filename, and attempts to load it from pcap_files/.
+
+        Reads the files, takes the first packet that is specified in that
+        file, and then sends it over to the C side for sending.
+
+        Args:
+            filename (str): Name of the file located in the pcap_files dir.
+        """
         if filename == '':
             return
-        packet = rdpcap('pcap_files/' + filename)[0]
+        try:
+            packet = rdpcap('pcap_files/' + filename)[0]
+        except IOError:
+            print filename, "doesn't exist."
+            return
         packet = conversions.convert_packet_int_array(packet)
         SEASIDE.send_SEASIDE(c_socket, c_socket_lock, 0, packet)
 
@@ -333,6 +345,8 @@ class PacketServer(object):
 
         Args:
             file_data (File): A CherryPy representation of a file.
+
+        TODO: Find a way to remove that NamedTemporaryFile middleman.
         """
         pcap_file = tempfile.NamedTemporaryFile()
         pcap_file.write(bytearray(file_data.file.read()))
@@ -362,8 +376,6 @@ if __name__ == '__main__':
     del defaults['Other']
     for layer in defaults:
         defaults[layer].pop('class', None)
-
-    print 'STUFF: ', scapy_class_names
 
     current_dir = os.path.dirname(os.path.abspath(__file__)) + os.path.sep
     config = {

@@ -1,8 +1,14 @@
 $(document).ready(function () {
     'use strict';
+
+    /* Load the top navbar, and then when that's done load the sidebar. These
+     * are dynamically loaded in because all of the pages require these
+     * two bars, so instead of a copy and paste deal, they're just dynamically
+     * loaded in on the client side. */
     $('#navbar-wrapper').load('/static/common/navbar.html', function () {
         $('#sidebar-wrapper').load('/static/common/sidebar.html', function () {
-            
+
+            /* Expand and collapse the sidebar. */ 
             function toggle_sidebar() {
                 $("#wrapper").toggleClass("toggled-2");
                 if ($("#wrapper").hasClass("toggled-2")) {
@@ -28,7 +34,6 @@ $(document).ready(function () {
                 e.preventDefault();
                 toggle_sidebar();
             });
-            //menu li nav-pills
             $('#menu li a').click(function () {
                 var checkElement = $(this).next();
                 if (checkElement.is('ul')) {

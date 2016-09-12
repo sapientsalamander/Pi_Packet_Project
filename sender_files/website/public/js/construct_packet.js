@@ -3,6 +3,8 @@ $(document).ready(function () {
 
     var layer_fields = {};
 
+    /* Used to remember which field is actively being configured, used for
+     * removing a layer, updating the appropriate fields, etc. */
     var active_layer = undefined
     var active_layer_index = undefined;
     var incID = 0;
@@ -12,6 +14,8 @@ $(document).ready(function () {
         return incID++;
     }
 
+    /* Get a list of layers and their fields, and then update layers with
+     * that information. */
     $.ajax({
         type: "POST",
         url: "get_configurable_layers",
@@ -31,6 +35,9 @@ $(document).ready(function () {
                 });
                 $("#layers-list").append(element);
             });
+
+            /* Every time a layer is clicked (IP, Ether, etc.), update the
+             * fields input with the appropriate fields (src, ttl, etc.)*/
             $(".packet-layer-select").click(function () {
                 var layer = $(this).children("a").text();
                 var temp_dict = {};
@@ -118,6 +125,7 @@ $(document).ready(function () {
         $("#" + active_layer).css("background-color", "#ccc");
     }
 
+    /* Delete the active layer. */
     $("#delete-button").click(function () {
         if (active_layer >= 0) {
             layers.splice(layers.indexOf(active_layer_index), 1);
@@ -127,7 +135,8 @@ $(document).ready(function () {
             update_selected_layers(layers);
         }
     });
-    
+
+    /* Move the active layer down in the list. */    
     $("#down-button").click(function () {
         var index = layers.indexOf(active_layer_index);
         if (active_layer >= 0 && index !== 0) {
@@ -135,7 +144,8 @@ $(document).ready(function () {
             update_selected_layers(layers);
         }
     });
-    
+
+    /* Move the active layer up in the list. */
     $("#up-button").click(function () {
         var index = layers.indexOf(active_layer_index);
         if (active_layer >= 0 && index !== layers.length - 1) {
@@ -143,7 +153,8 @@ $(document).ready(function () {
             update_selected_layers(layers);
         }
     });
-    
+
+    /* Send the configured packet to the C side. */
     $("#done-configuration").click(function() {
         var req = "";
         console.log(JSON.stringify(layers));
@@ -168,6 +179,7 @@ $(document).ready(function () {
         });
     });
 
+    /* Save a pcap file on the server for later selection. */
     $("#save-file").click(function () {
         var layers_temp = JSON.parse(JSON.stringify(layers));
 
@@ -191,6 +203,7 @@ $(document).ready(function () {
         });
     });
 
+    /* Prompt the user to save a pcap file on their local computer. */
     $("#save-file-local").click(function () {
         var layers_temp = JSON.parse(JSON.stringify(layers));
 
@@ -217,7 +230,6 @@ $(document).ready(function () {
             }
         };
         xhr.send();
-
     });
 
 });

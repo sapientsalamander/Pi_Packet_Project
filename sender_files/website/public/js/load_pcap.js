@@ -1,6 +1,7 @@
 $(document).ready(function () {
     'use strict';
 
+    /* Load a file from the server files stored in pcap_files. */
     $("#load-file-from-server").click(function () {
         $.ajax({
             type: "POST",
@@ -8,6 +9,8 @@ $(document).ready(function () {
         });
    });
 
+    /* Takes the pcap file uploaded to input_file, and then sends it to the
+     * server for processing. */
     $("#load-file-from-user").click(function () {
         var file = $("#input_file")[0].files[0];
         var form_data = new FormData();
@@ -17,6 +20,8 @@ $(document).ready(function () {
         request.send(form_data);
     });
 
+    /* Get a list of filenames that are located in pcap_files, and then
+     * appends each name to the input box for selection. */
     $.ajax({
         type: "POST",
         url: "get_pcap_filenames",

@@ -4,23 +4,8 @@ $(document).ready(function () {
     var MAX_LINE_RATE = 100000000; // In bits / second. 100 Mbps
     var packet_size = 0;
 
-    function byte_array_to_long(/*byte[]*/byteArray) {
-        var value = 0;
-        for (var i = 0; i < byteArray.length; i++) {
-            value = (value * 256) + byteArray[i] * 1;
-        }
-        return value;
-    }
-
-    function string_to_byte_array(data) {
-        var byteArray = data;
-        var bytes = [];
-        for (var i = 0; i < byteArray.length; ++i) {
-            bytes = bytes.concat([byteArray.charCodeAt(i)]);
-        }
-        return bytes;
-    }
-
+    /* Takes in a bandwidth in bits per second, and then simplifies the units,
+     * and returns a string with the calculated value. */
     function calculate_bandwidth(band) {
         var units = ["bps", "Kbps", "Mbps", "Gbps"];
         var i = 0;
@@ -30,7 +15,11 @@ $(document).ready(function () {
         }
         return String(band.toFixed(2)) + " " + units[i];
     }
-    
+
+    /* The pps bar only allows you to go up to 100 Mbps. However, the maximum
+     * number of pps that you can send depends on the size of the packet.
+     * When you get the current packet size, you call this, so then it
+     * calculates the maximum number of pps that you can send. */    
     function update_max() {
         if (packet_size == 0) {
             $("#pps").attr("max", MAX_LINE_RATE);
@@ -41,7 +30,8 @@ $(document).ready(function () {
         $("#packet_size_text").html("with " + String(packet_size) + " byte packets");
         $("#pps").val("0");
     }
-    
+
+    /* Updates the pps bar. */
     function update_bar() {
         var band = $("#bandwidth-bar");
         var max = parseInt(band.attr("aria-valuemax"));
@@ -50,6 +40,9 @@ $(document).ready(function () {
         band.html(calculate_bandwidth(bandwidth));
     }
 
+    /* Takes in a pps argument, then calculates the sleep time in between each
+     * send packet to get to this target pps. The sleep time is calculated as
+     * one byte for the seconds, then 4 more for the microseconds. */
     function pps_to_sleep(pps) {
         if (pps == 0) {
             return [0,0,0,0,0];
@@ -66,10 +59,9 @@ $(document).ready(function () {
         var temp_8 = new Uint8Array(temp_buffer);
         temp_32[0] = sleep_time;
         return [seconds].concat([].slice.call(temp_8));
-        // Doesn't work with IE
-        //return [seconds].concat(Array.from(new Uint8Array(Uint32Array.valueOf(sleep_time).buffer)));
     }
 
+    /* Done configuring the pps, send it to the C side. */
     $("#done-configuration").click(function () {
         $.ajax({
             type: "POST",
@@ -87,6 +79,7 @@ $(document).ready(function () {
         update_bar();
     });
 
+    /* Request the size of the packet that is currently loaded in C memory. */
     $.ajax({
         type: "POST",
         url: "command_and_respond?command=8&size=I",
