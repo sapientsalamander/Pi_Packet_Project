@@ -152,23 +152,23 @@ class PacketServer(object):
 
     @cherrypy.expose
     def index(self):
-        return open('index.html')
+        return open('public/html/index.html')
 
     @cherrypy.expose
     def construct_packet(self):
-        return open('construct_packet.html')
+        return open('public/html/construct_packet.html')
 
     @cherrypy.expose
     def configure_speed(self):
-        return open('configure_speed.html')
+        return open('public/html/configure_speed.html')
 
     @cherrypy.expose
     def send(self):
-        return open('send.html')
+        return open('public/html/send.html')
 
     @cherrypy.expose
     def load_pcap(self):
-        return open('load_pcap.html')
+        return open('public/html/load_pcap.html')
 
     # PAGE REQUESTS END HERE
 

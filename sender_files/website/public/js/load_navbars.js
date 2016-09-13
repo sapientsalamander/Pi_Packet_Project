@@ -34,6 +34,9 @@ $(document).ready(function () {
                 e.preventDefault();
                 toggle_sidebar();
             });
+
+            /* Whenever and expandable sidebar icon is clicked, expand it
+             * and collapse any other ones that are open. */
             $('#menu li a').click(function () {
                 var checkElement = $(this).next();
                 if (checkElement.is('ul')) {

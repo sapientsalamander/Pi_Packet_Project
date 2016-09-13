@@ -13,36 +13,8 @@ $(document).ready(function () {
         return String(band.toFixed(2)) + " " + units[i];
     }
 
-    function byte_array_to_long(/*byte[]*/byteArray) {
-        var value = 0;
-        for (var i = 0; i < byteArray.length; ++i) {
-            value = (value * 256) + byteArray[i] * 1;
-        }
-        return value;
-    };
-
-    function string_to_byte_array(data) {
-        var byteArray = data;
-        var bytes = [];
-        for (var i = 0; i < byteArray.length; ++i) {
-            bytes = bytes.concat([byteArray.charCodeAt(i)]);
-        }
-        return bytes;
-    }
-
-    function unpack(str) {
-        var bytes = [];
-        for(var i = 0, n = str.length; i < n; i++) {
-            var char = str.charCodeAt(i);
-            bytes.push(char >>> 8, char & 0xFF);
-        }
-        return bytes;
-    }
-
-    function replaceAll(str, find, replace) {
-        return str.replace(new RegExp(find, 'g'), replace);
-    }
-
+    /* Requests the bandwidth and updates the progress bar to represent
+     * the current bandwidth. */
     function update_bar() {
         $.ajax({
             type: "POST",
@@ -83,7 +55,8 @@ $(document).ready(function () {
             contentType: "application/json; charset=utf-8",
         });
     });
-    
+
+    /* Gets the bandwidth from C side once every second. */
     setInterval(function () {
         update_bar();
     }, 1000);

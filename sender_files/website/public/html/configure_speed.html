@@ -30,13 +30,8 @@
                     </h1>
                     <br>
                     <div class="collapse" id="help_expand">
-                        <div class="card card-block">Hello! Welcome to the packet configuration page, where you'll be able to craft the packet of your dreams. First things, first:
-                            <ul>
-                                <li>You gotta start selecting which layers you want in this packet. Just click the add layer button, and select which layer you want.</li>
-                                <li>Next, you gotta configure what's inside each layer. Click the layer you want to edit, and a bunch of fields will pop up.</li>
-                                <li>And then you just fill out those fields, and click the dandy 'Done' button!</li>
-                            </ul>
-                            "But wait," I hear you say, "doesn't an Ethernet frame have a checksum / IP packet have a type field / UDP have a length field / etc." YES! However, we here at PPP believe that we are in the future. So we'll fill those out automatically for you.
+                        <div class="card card-block">
+                            This is the configure speed page, where you're able to set how fast you want the packets to be sent out. Specifically, you set how many packets per seconds you want to be sent out. There's also an informational progress bar that tells you what the calculated bandwidth will be. Keep in mind that this bar uses both the pps that is entered and the currently configured packet on the C side, so if there's no packet on the C side, then it will just display 0.
                         </div>
                     </div>
                 </div>

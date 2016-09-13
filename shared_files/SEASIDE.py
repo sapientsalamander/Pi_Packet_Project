@@ -98,6 +98,5 @@ def request_SEASIDE(socket, socket_lock, SEASIDE_flag):
             print repr(data), len(data), struct.unpack('=H', data[1:3])[0] + 3
             if len(data) >= struct.unpack('=H', data[1:3])[0] + 3:
                 break
-    print 'Broke out of the loop'
     print repr(data)
     return data[3:]
