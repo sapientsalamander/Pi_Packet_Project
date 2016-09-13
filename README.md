@@ -4,13 +4,20 @@ This project focuses on the basics of networking. Two Raspberry Pi's will form a
 
 For more information, check the rndwiki under Raspberry Pi Network Tools available on the rndwiki!
 
+Read COMPILE_README.md for more information on compiling this sucker.
+
+IMPORTANT: If you want to run the webserver or the LCD screen Python programs, you have to run them as modules from the root directory of this project. In essence, make sure that you're in the same directory as this README.md file, and then run the following command to start the server:
+
+```bash
+sudo python -m sender_files.website.server
+```
+
 ## Overview
 ### System Overview
 
 There are two main projects being worked on here: a Sending Pi and a Receiving Pi. The Sending Pi acts as a general packet generator, where you will be able to craft packets of different layers, configure fields within those layers, configure the bandwidth and other sending options, and then start sending. The Receiving Pi acts as a diagnostic tool. It displays information about any incoming packets, bandwidth, etc. They can be used in conjunction with one another, but they can also be separated and used independently.
-### Assumptions
 
-1. A Raspberry Pi 3 is powerful enough to run multiple I/O interfaces, while still sending and receiving at (mostly) line rate.
+### Assumptions
 
 ### Facts
 
@@ -18,6 +25,7 @@ There are two main projects being worked on here: a Sending Pi and a Receiving P
 2. The Raspberry Pi 3 (along with the 2) has an onboard Ethernet interface that maxes out at a theoretical 100 Mbps (although in reality the max is usually about 95-97 Mbps).
 3. A Python <-> C interface, where Python handles the user interface and C manages the sending and receiving of packets, on the receiving Raspberry Pi increases the max bandwidth to ~7 Mbps. Note that this is with 64 byte packets; if you increase the size of the packets, then the bandwidth will also increase up to a max of 97-98 Mbps.
 4. pcap will allow the sending of arbitrary packets, made up of a variety of layers, to be sent on an interface.
+5. Cutting out a lot of the features of the C side (bandwidth calculations, more accurate bandwidth, etc.) will allow you to increase max throughput to about 15 Mbps.
 
 ### Limitations
 
@@ -79,7 +87,7 @@ Alternatively, the Python socket module can be used to open ports by binding soc
 #### SEASIDE Structure
 
 The struct that is used to communicate between the C Backend and UI programs has the following layout:
-```
+```C
 typedef struct {
     uint8_t type;
     uint16_t size;
