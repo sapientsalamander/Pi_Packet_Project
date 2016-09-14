@@ -84,9 +84,7 @@ static socklen_t size_sock;
 /* A thread dedicated solely to sending packets onto the wire. */
 static pthread_t ui_listen_thread;
 
-/* Static error buffer that holds any errors that pcap returns back to us.
- * Used so that you don't have to declare an error buffer per function. */
-static char errbuf[PCAP_ERRBUF_SIZE];
+/* pcap handle for the listener that we'll create. */
 static pcap_t *handle;
 
 /* packet and packet length, to send to the receiving Pi. */
@@ -106,7 +104,8 @@ static volatile uint32_t num_packets_received = 0;
 
 /* Timespecs for received packets. Used to calculate bandwidth. */
 static struct timespec cur_time;
-static struct timespec prev_time;
+static struct timespec packet_received_time;
+static struct timespec prev_packet_received_time;
 static struct timespec elapsed_time;
 
 /* Helper function to add two timespecs together. */
@@ -154,28 +153,21 @@ callback(u_char *user,
          const struct pcap_pkthdr *pkthdr,
          const u_char *packet_recv)
 {
-    clock_gettime(CLOCK_MONOTONIC, &cur_time);
+    (void) user;
 
     pthread_mutex_lock(&packet_mutex);
 
     num_packets_received++;
+    prev_packet_received_time = packet_received_time;
+    clock_gettime(CLOCK_MONOTONIC, &packet_received_time);
+    printf("Timespec: %lld.%.9ld\n", (long long) packet_received_time.tv_sec,
+                                     packet_received_time.tv_nsec);
 
     /* Stores the received packet for later diagnostic use. */
     memcpy(packet, packet_recv, pkthdr->caplen);
     packet_len = pkthdr->caplen;
 
-    /* Calculates the elapsed time, and approximates the bandwidth from the
-     * time between received packets. */
-    elapsed_time = timespec_sub(&cur_time, &prev_time);
-    double d_time = elapsed_time.tv_sec
-                    + ( (double) elapsed_time.tv_nsec
-                        / NANOSECONDS_PER_SECOND );
-    bandwidth = (packet_len * 8.0) / d_time;
-    printf("Bandwidth: %llu\n", bandwidth);
-
     pthread_mutex_unlock(&packet_mutex);
-
-    prev_time = cur_time;
 }
 
 
@@ -267,6 +259,9 @@ pcap_set_filter(const char *filter)
 static int
 initialize_pcap(void)
 {
+    /* Error buffer for any error that pcap throws at us. */   
+    static char errbuf[PCAP_ERRBUF_SIZE];
+
     handle = pcap_create(DEVICE, errbuf);
 
     if (handle == NULL) {
@@ -374,7 +369,30 @@ listen_packet_info(void *ui_fd_temp)
             break;
 
         /* Return the bandwidth calculated. */
+        /* TODO: See if we can cut down the size of this case. This is all
+         * within the mutex, so we could be potentially blocking other
+         * important processes. */
+        /* TODO: Not accurate at speeds around 1 Mbps. */
         case SEASIDE_GET_BANDWIDTH:
+            /* Calculates the elapsed time, and approximates the bandwidth from the
+             * time between received packets. */
+            clock_gettime(CLOCK_MONOTONIC, &cur_time);
+
+            if (timespec_sub(&cur_time, &packet_received_time).tv_sec >= 1) {
+                /* It's been a while since we've received a packet, so we
+                 * set bandwidth to 0. */
+                bandwidth = 0;
+            } else {
+                elapsed_time = timespec_sub(&packet_received_time,
+                                            &prev_packet_received_time);
+                double d_time = elapsed_time.tv_sec
+                                + ( (double) elapsed_time.tv_nsec
+                                    / NANOSECONDS_PER_SECOND );
+    
+                bandwidth = (packet_len * 8.0) / d_time;
+                printf("Bandwidth: %llu | d_time: %Lf\n", bandwidth, d_time);
+            }
+
             send_response(ui_fd, &bandwidth, sizeof(bandwidth));
             break;
 
@@ -461,8 +479,6 @@ main(void)
 
     pthread_create(&ui_listen_thread, NULL, accept_connections, NULL);
 
-    /* Initializes the time, for bandwidth calculations. */
-    clock_gettime(CLOCK_MONOTONIC, &prev_time);
     pcap_loop(handle, -1, callback, NULL);
 
     close(socket_fd);

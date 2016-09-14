@@ -162,7 +162,7 @@ def listen_packets_loop():
             num_packets_received = struct.unpack('=I', num_packets_received)
             update_packet_info(packet, num_packets_received)
 
-        time.sleep(5)
+        time.sleep(2)
 
 
 def input_loop():
