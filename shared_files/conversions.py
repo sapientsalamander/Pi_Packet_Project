@@ -6,7 +6,6 @@ units.
 convert_packet_int_array: Converts a Scapy packet to an array of ints.
 convert_bandwidth_units: Calculate the unit for a given bps.
 convert_delay_bytes: Converts time in seconds and microseconds to a bytearray.
-
 """
 import struct
 
@@ -17,14 +16,6 @@ def convert_packet_int_array(pac):
     tmp = [x + y for x, y in zip(tmp[0::2], tmp[1::2])]
     return map(lambda x: int(x, 16), tmp)
 
-# TODO Remove, unused
-def convert_MAC_addr(address):
-    """Converts a MAC address from ffffff-ffffff to ff:ff:ff:ff:ff:ff"""
-    mac = []
-    address = address.replace('-', '')
-    for i in xrange(0, len(address), 2):
-        mac.append(address[i:i+2])
-    return ':'.join(mac)
 
 # TODO Remove, unused
 def convert_packet_delay(pps):
@@ -43,6 +34,7 @@ def convert_packet_delay(pps):
     except (ZeroDivisionError):
         useconds = 0
     return int(useconds)
+
 
 # TODO Remove, unused
 def convert_bandwidth_bits_per_second(d_bytes, d_time,
@@ -85,4 +77,15 @@ def convert_bandwidth_units(bandwidth):
 
 
 def convert_delay_bytes(delay_seconds, delay_useconds):
+    """Takes in the delay, and returns it in SEASIDE compatible form.
+
+    Args:
+        delay_seconds (int): The number of seconds in between each packet sent.
+        delay_useconds (int): The number of microseconds in between packets.
+
+    Returns:
+        str: The bytes of sleep time formatted to SEASIDE specifications.
+            i.e. It returns it so seconds takes one byte while useconds takes
+            four bytes.
+    """
     return struct.pack('=BI', delay_seconds, delay_useconds)

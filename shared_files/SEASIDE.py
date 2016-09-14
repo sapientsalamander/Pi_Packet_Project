@@ -1,6 +1,6 @@
 """The Python side of SEASIDE communication.
 
-Contains the enum of SEASIDE flags, including unimplemented ones, as 
+Contains the enum of SEASIDE flags, including unimplemented ones, as
 well as two functions for sending SEASIDE communications. One function sends
 without expecting a response and is used to send instructions to the C-side.
 The other waits for a response and is used to request statistical information
@@ -49,7 +49,7 @@ def send_SEASIDE(socket, socket_lock, SEASIDE_flag, data=None):
                  C-side.
             7  - Get Bandwidth. Requests the current bandwidth use from the
                  C-side.
-            8  - Get Packet Size. Requests the size of the currently 
+            8  - Get Packet Size. Requests the size of the currently
                  buffered packet from the C-side.
             9  - Start Sequence. Currently unimplemented.
             10 - Stop Sequence. Currently unimplemented.
@@ -66,6 +66,7 @@ def send_SEASIDE(socket, socket_lock, SEASIDE_flag, data=None):
     SEASIDE_packet = bytearray(data)
     with socket_lock:
         socket.send(SEASIDE_header + SEASIDE_packet)
+
 
 def request_SEASIDE(socket, socket_lock, SEASIDE_flag):
     """Sends a request for information C-side and returns the response.

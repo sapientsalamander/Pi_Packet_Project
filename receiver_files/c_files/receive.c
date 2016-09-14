@@ -148,6 +148,7 @@ timespec_sub(const struct timespec *t1, const struct timespec *t2)
 /* Every time a packet is received, pcap calls this function. We use it to
  * store relevant information for later retrieval from the ui threads. */
 /* TODO: Handle situations where we only receive part of a packet. */
+/* TODO: See if we're still dropping packets at high-volume bandwidth. */
 void
 callback(u_char *user,
          const struct pcap_pkthdr *pkthdr,

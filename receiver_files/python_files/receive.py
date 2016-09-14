@@ -54,7 +54,8 @@ cur_screen = Screens.Summary.value
 # type of screen there is.
 # TODO: Currently relies on the nature of atomic operations and the Global
 # Interpreter Lock. Might want to change it so it is an structure with
-# actual multithreaded support.
+# not so subtle multithreading support i.e. locks and the like, or a Python
+# structure that is inherently multithreaded.
 screen_output = [['', ''] for x in xrange(len(Screens))]
 
 # An LCD lock, to ensure that the two threads, one for port listening and

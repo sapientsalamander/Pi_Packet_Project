@@ -26,7 +26,10 @@ import scapy.all as scapy
 
 PACKET_DIR = '/home/pi/Pi_Packet_Project/sender_files/packet_files/'
 
+
 # TODO Remove, unused
+# NOTE: Not currently used, may need to be utilized in the future, leaving it
+# here for now.
 def read_interface_bytes(interface, io):
     """Return the total number of rx_bytes or tx_bytes since startup.
 
@@ -54,8 +57,8 @@ def read_cpu_usage():
     """Calculates cpu usage using the psutil library.
 
     Returns:
-        tuple (float, list): The first value is the average cpu usage, while
-        the second value is the cpu usage per core.
+        tuple (float, [float, ..]): The first value is the average cpu usage,
+        while the second value is the cpu usage per core.
         """
     return (psutil.cpu_percent(), psutil.cpu_percent(percpu=True))
 
