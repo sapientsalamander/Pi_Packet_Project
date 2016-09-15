@@ -36,6 +36,9 @@
 /* Filter that pcap applies to any incoming packets. */
 #define PCAP_FILTER "port 4321"
 
+/* The file to save all incoming packets to. */
+#define PCAP_FILE "received_packets.pcap"
+
 /* The size of the buffer that holds incoming packets. */
 #define PCAP_BUFFER_SIZE 2097152
 
@@ -108,6 +111,25 @@ static struct timespec packet_received_time;
 static struct timespec prev_packet_received_time;
 static struct timespec elapsed_time;
 
+/* File descriptor to the pcap file where we save all incoming packets. */
+static int pcap_file_fd;
+
+/* A pcap file global header, which goes at the beginning of every pcap file.
+ * Note that this is in big-endian format. */
+const uint8_t PCAP_GLOBAL_HEADER[] = {
+    0xa1, 0xb2, 0xc3, 0xd4, /* Magic number. */
+    0x00, 0x02, /* Major version. */
+    0x00, 0x04, /* Minor version. */
+    0x00, 0x00, 0x00, 0x00, /* Timezone, not used. */
+    0x00, 0x00, 0x00, 0x00, /* Sigfigs, not used. */
+    0x00, 0x00, 0xff, 0xff, /* Snaplen. */
+    0x00, 0x00, 0x00, 0x01, /* Network type, eth0 in this case. */
+    /* WARNING: If you change the interface you're listening on, you should
+     * also change the network type above. */
+    /* TODO: Make it so that network type is automatically configured
+     * based on the interface we connect to. */
+};
+
 /* Helper function to add two timespecs together. */
 static struct timespec
 timespec_add(const struct timespec *t1, const struct timespec *t2)
@@ -144,6 +166,27 @@ timespec_sub(const struct timespec *t1, const struct timespec *t2)
     return result;
 }
 
+/* A helper function for write that automatically deals with retrying and
+ * error checking. */
+int
+write_helper(int fd, void *buf, size_t size)
+{
+    for (size_t n = 0; n < size; ) {
+        ssize_t ret = write(fd, (char *)buf + n, size - n);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN) {
+                continue;
+            } else {
+                perror("Write helper error: ");
+                return -1;
+            }
+        } else  {
+            n += ret;
+        }
+    }
+    return 0;
+}
+
 /* Every time a packet is received, pcap calls this function. We use it to
  * store relevant information for later retrieval from the ui threads. */
 /* TODO: Handle situations where we only receive part of a packet. */
@@ -155,17 +198,31 @@ callback(u_char *user,
 {
     (void) user;
 
+    /* A pcap packet header, for when we're writing the pcap_file. */
+    static uint32_t packet_header[4];
+    packet_header[2] = htonl(pkthdr->caplen);
+    packet_header[3] = htonl(pkthdr->len);
+
     pthread_mutex_lock(&packet_mutex);
 
     num_packets_received++;
     prev_packet_received_time = packet_received_time;
     clock_gettime(CLOCK_MONOTONIC, &packet_received_time);
-    printf("Timespec: %lld.%.9ld\n", (long long) packet_received_time.tv_sec,
-                                     packet_received_time.tv_nsec);
+
+    packet_header[0] = htonl(packet_received_time.tv_sec);
+    packet_header[1] = htonl(packet_received_time.tv_nsec);
 
     /* Stores the received packet for later diagnostic use. */
     memcpy(packet, packet_recv, pkthdr->caplen);
     packet_len = pkthdr->caplen;
+
+    if (write_helper(pcap_file_fd, packet_header, sizeof(packet_header))) {
+        printf("Error in writing to pcap_file\n");
+    }
+
+    if (write_helper(pcap_file_fd, packet, packet_len)) {
+        printf("Error in writing to pcap_file\n");
+    }
 
     pthread_mutex_unlock(&packet_mutex);
 }
@@ -455,6 +512,24 @@ lock_single_instance_file(void)
     return 0;
 }
 
+/* Creates a pcap file that we will use to record all incoming packets. Also
+ * writes in the global header. */
+int
+initialize_pcap_file(void)
+{
+    if ((pcap_file_fd = open(PCAP_FILE, O_WRONLY | O_APPEND | O_CREAT | O_TRUNC,
+                            S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH))
+                      == -1) {
+        printf("Error in creating file %s\n", PCAP_FILE);
+        return -1;
+    }
+
+    if (write_helper(pcap_file_fd, PCAP_GLOBAL_HEADER, sizeof(PCAP_GLOBAL_HEADER))) {
+        return -1;
+    }
+    return 0;
+}
+
 /* Initializes pcap and the socket, and then sends the packet that was
  * received from the UI program. */
 int
@@ -472,6 +547,11 @@ main(void)
 
     if (initialize_pcap()) {
         printf("Error in initialize_pcap().\n");
+        return -1;
+    }
+
+    if (initialize_pcap_file()) {
+        printf("Error in initialize_pcap_file().\n");
         return -1;
     }
 

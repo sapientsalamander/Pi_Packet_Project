@@ -20,6 +20,12 @@
 
 # GNU Data File
 *.gcno
+*.gcda
+
+*.out
+
+# Received packets
+*.pcap
 
 # Log files
 *.log
